@@ -2,161 +2,218 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Tutaj wpisz swoje IP (Lokalne lub Publiczne), aby dostawać uprawnienia Admina
-const ADMIN_IPS = [
-    '127.0.0.1', 
-    '::1', 
-    '::ffff:127.0.0.1'
-    // Przykład: '83.24.12.99'
-];
+// Plik bazy danych JSON i logów
+const DB_FILE = path.join(__dirname, 'database.json');
+const LOG_FILE = path.join(__dirname, 'casino.log');
+
+// IP Administratora
+const ADMIN_IPS = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Pokoje Ruletki Multiplayer
-const rooms = {
-    'Pokój Pokój Łatwy ($10-$100)': { players: {}, bets: [], timer: 15, interval: null },
-    'Pokój VIP ($100-$1000)': { players: {}, bets: [], timer: 15, interval: null }
+// Baza danych graczy
+let db = { players: {} };
+if (fs.existsSync(DB_FILE)) {
+    try {
+        db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    } catch (e) {
+        console.error("Błąd odczytu bazy:", e);
+    }
+}
+
+function saveDB() {
+    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+}
+
+function logEvent(text) {
+    const entry = `[${new Date().toISOString()}] ${text}\n`;
+    fs.appendFileSync(LOG_FILE, entry);
+    io.emit('admin-log', entry);
+}
+
+// Stan ruletki
+let rouletteState = {
+    timer: 15,
+    timerMax: 15,
+    status: 'WAITING', // 'WAITING', 'SPINNING'
+    forcedResult: null, // Pozwala adminowi wymusić wynik
+    history: [1, 12, 4, 0, 7, 14, 2, 11, 6], // Ostatnie wyniki
+    bets: { red: [], green: [], black: [] }
 };
 
-function startRoomTimer(roomName) {
-    const room = rooms[roomName];
-    if (room.interval) return;
+// Pętla odliczania ruletki
+setInterval(() => {
+    if (rouletteState.status === 'WAITING') {
+        rouletteState.timer--;
+        io.emit('timer-tick', rouletteState.timer);
 
-    room.interval = setInterval(() => {
-        room.timer--;
-        io.to(roomName).emit('timer-tick', room.timer);
-
-        if (room.timer <= 0) {
-            // Losowanie liczby 0-36
-            const winningNumber = Math.floor(Math.random() * 37);
-            
-            let color = 'green';
-            if (winningNumber !== 0) {
-                const reds = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
-                color = reds.includes(winningNumber) ? 'red' : 'black';
-            }
-
-            // Rozliczanie zakładów
-            for (let socketId in room.players) {
-                const player = room.players[socketId];
-                let winnings = 0;
-
-                room.bets.filter(b => b.socketId === socketId).forEach(bet => {
-                    if (bet.type === color) {
-                        winnings += bet.amount * 2;
-                    } else if (bet.type === 'number' && parseInt(bet.value) === winningNumber) {
-                        winnings += bet.amount * 36;
-                    }
-                });
-
-                player.balance += winnings;
-            }
-
-            io.to(roomName).emit('roulette-result', {
-                number: winningNumber,
-                color: color,
-                players: room.players
-            });
-
-            // Reset pokoju
-            room.bets = [];
-            room.timer = 15;
+        if (rouletteState.timer <= 0) {
+            spinRoulette();
         }
-    }, 1000);
+    }
+}, 1000);
+
+function spinRoulette() {
+    rouletteState.status = 'SPINNING';
+    
+    // Losowanie (0 = zielony, 1-7 = czerwony, 8-14 = czarny)
+    let winningNumber;
+    if (rouletteState.forcedResult !== null) {
+        winningNumber = rouletteState.forcedResult;
+        rouletteState.forcedResult = null;
+    } else {
+        winningNumber = Math.floor(Math.random() * 15);
+    }
+
+    let winningColor = 'green';
+    if (winningNumber >= 1 && winningNumber <= 7) winningColor = 'red';
+    if (winningNumber >= 8 && winningNumber <= 14) winningColor = 'black';
+
+    logEvent(`Losowanie: Wygrana cyfra ${winningNumber} (${winningColor.toUpperCase()})`);
+
+    // Wysłanie komendy zakręcenia
+    io.emit('roulette-spin', { winningNumber, winningColor });
+
+    // Rozliczenie zakładów po zakończeniu animacji (po 5 sek)
+    setTimeout(() => {
+        let multiplier = winningColor === 'green' ? 7 : 2;
+        let winnersLog = [];
+
+        ['red', 'green', 'black'].forEach(color => {
+            rouletteState.bets[color].forEach(bet => {
+                if (color === winningColor) {
+                    const winAmount = bet.amount * multiplier;
+                    if (db.players[bet.nick]) {
+                        db.players[bet.nick].balance += winAmount;
+                    }
+                    winnersLog.push(`${bet.nick} wygrał $${winAmount.toLocaleString()}`);
+                }
+            });
+        });
+
+        if (winnersLog.length > 0) {
+            logEvent(`Wygrani: ${winnersLog.join(', ')}`);
+        }
+
+        saveDB();
+
+        // Aktualizacja historii
+        rouletteState.history.unshift(winningNumber);
+        if (rouletteState.history.length > 10) rouletteState.history.pop();
+
+        // Reset
+        rouletteState.bets = { red: [], green: [], black: [] };
+        rouletteState.timer = rouletteState.timerMax;
+        rouletteState.status = 'WAITING';
+
+        io.emit('roulette-reset', {
+            history: rouletteState.history,
+            players: getOnlinePlayersData()
+        });
+    }, 6000);
+}
+
+function getOnlinePlayersData() {
+    const online = {};
+    for (let [id, socket] of io.sockets.sockets) {
+        if (socket.nick && db.players[socket.nick]) {
+            online[id] = {
+                nick: socket.nick,
+                balance: db.players[socket.nick].balance,
+                ip: socket.handshake.address.replace('::ffff:', ''),
+                isAdmin: socket.isAdmin
+            };
+        }
+    }
+    return online;
 }
 
 io.on('connection', (socket) => {
     const clientIp = socket.handshake.address.replace('::ffff:', '');
-    const isAdmin = ADMIN_IPS.includes(clientIp) || clientIp === '127.0.0.1';
+    socket.isAdmin = ADMIN_IPS.includes(clientIp) || clientIp === '127.0.0.1';
 
-    let user = {
-        id: socket.id,
-        nick: 'Gość',
-        balance: 1000,
-        currentRoom: null,
-        isAdmin: isAdmin
-    };
-
-    // Weryfikacja i ustawianie nicku
     socket.on('set-nickname', (nick) => {
-        user.nick = nick || 'Gracz_' + Math.floor(Math.random() * 1000);
-        socket.emit('init-player', user);
-    });
+        const cleanNick = nick.trim() || 'Gracz_' + Math.floor(Math.random() * 1000);
+        socket.nick = cleanNick;
 
-    // Dołączanie do pokoju ruletki
-    socket.on('join-room', (roomName) => {
-        if (!rooms[roomName]) return;
-
-        if (user.currentRoom) {
-            socket.leave(user.currentRoom);
-            delete rooms[user.currentRoom].players[socket.id];
+        if (!db.players[cleanNick]) {
+            db.players[cleanNick] = { balance: 100000, createdAt: new Date() };
+            saveDB();
+            logEvent(`Nowy gracz po raz pierwszy: ${cleanNick}`);
         }
 
-        user.currentRoom = roomName;
-        socket.join(roomName);
-        rooms[roomName].players[socket.id] = user;
-
-        startRoomTimer(roomName);
-
-        io.to(roomName).emit('room-update', {
-            players: rooms[roomName].players,
-            roomName: roomName
+        socket.emit('init-player', {
+            nick: cleanNick,
+            balance: db.players[cleanNick].balance,
+            isAdmin: socket.isAdmin,
+            history: rouletteState.history,
+            timer: rouletteState.timer
         });
+
+        io.emit('admin-players-update', getOnlinePlayersData());
     });
 
-    // Stawianie zakładu
     socket.on('place-bet', (data) => {
-        const room = rooms[user.currentRoom];
-        if (!room) return;
+        if (!socket.nick || rouletteState.status !== 'WAITING' || rouletteState.timer <= 2) return;
+        
+        const player = db.players[socket.nick];
+        const amount = parseInt(data.amount);
 
-        if (user.balance >= data.amount && room.timer > 3) {
-            user.balance -= data.amount;
-            room.bets.push({
+        if (amount > 0 && player && player.balance >= amount && ['red', 'green', 'black'].includes(data.color)) {
+            player.balance -= amount;
+            saveDB();
+
+            rouletteState.bets[data.color].push({
                 socketId: socket.id,
-                nick: user.nick,
-                type: data.type,
-                value: data.value,
-                amount: data.amount
+                nick: socket.nick,
+                amount: amount
             });
 
-            io.to(user.currentRoom).emit('bet-placed', {
-                nick: user.nick,
-                type: data.type,
-                value: data.value,
-                amount: data.amount,
-                newBalance: user.balance
+            logEvent(`${socket.nick} postawił $${amount.toLocaleString()} na ${data.color}`);
+
+            io.emit('bet-placed', {
+                nick: socket.nick,
+                color: data.color,
+                amount: amount,
+                bets: rouletteState.bets,
+                playerBalance: player.balance
             });
         }
     });
 
-    // Panel Admina: Doładowanie żetonów
-    socket.on('admin-add-balance', (data) => {
-        if (!user.isAdmin) return;
-        
-        for (let r in rooms) {
-            if (rooms[r].players[data.targetSocketId]) {
-                rooms[r].players[data.targetSocketId].balance += parseInt(data.amount);
-                io.to(data.targetSocketId).emit('balance-updated', rooms[r].players[data.targetSocketId].balance);
-                io.to(r).emit('room-update', { players: rooms[r].players, roomName: r });
-            }
+    // PANEL ADMINA
+    socket.on('admin-set-balance', (data) => {
+        if (!socket.isAdmin) return;
+        if (db.players[data.nick]) {
+            db.players[data.nick].balance = parseInt(data.balance);
+            saveDB();
+            logEvent(`ADMIN zmienił saldo ${data.nick} na $${data.balance}`);
+            io.emit('admin-players-update', getOnlinePlayersData());
+            io.emit('balance-update', { nick: data.nick, balance: db.players[data.nick].balance });
         }
+    });
+
+    socket.on('admin-force-result', (number) => {
+        if (!socket.isAdmin) return;
+        rouletteState.forcedResult = parseInt(number);
+        logEvent(`ADMIN wymusił następny wynik: ${number}`);
+    });
+
+    socket.on('admin-send-announcement', (msg) => {
+        if (!socket.isAdmin) return;
+        io.emit('announcement', msg);
     });
 
     socket.on('disconnect', () => {
-        if (user.currentRoom && rooms[user.currentRoom]) {
-            delete rooms[user.currentRoom].players[socket.id];
-            io.to(user.currentRoom).emit('room-update', {
-                players: rooms[user.currentRoom].players,
-                roomName: user.currentRoom
-            });
-        }
+        io.emit('admin-players-update', getOnlinePlayersData());
     });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Serwer uruchomiony na porcie ${PORT}`));
+server.listen(PORT, () => console.log(`Serwer działa na porcie ${PORT}`));
