@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Royal Grand Casino Pro</title>
+    <title>NapletoCasino</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -63,7 +63,7 @@
         .notif-error { background: var(--red); }
         .notif-info { background: #3498db; }
 
-        /* GRID Z KANĄ I PASEK LIVE BETS */
+        /* LAYOUT GRID Z PASEM DLA RULETKI */
         .layout-grid {
             display: grid;
             grid-template-columns: 1fr 320px;
@@ -71,6 +71,33 @@
         }
 
         .game-panel { background: var(--card-bg); border-radius: 16px; padding: 25px; border: 1px solid rgba(255,255,255,0.05); }
+
+        /* HISTORIA RULETKI (GÓRA) */
+        .history-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0,0,0,0.4);
+            padding: 10px 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .history-title { font-size: 0.85rem; color: #888; font-weight: 600; text-transform: uppercase; }
+        .history-list { display: flex; gap: 8px; overflow-x: auto; }
+        .history-item {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        }
 
         /* PRECYZYJNA ANIMACJA RULETKI */
         .roulette-wrapper {
@@ -131,7 +158,7 @@
         .extra-bets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
         .color-bets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
 
-        /* LIVE BETS PANEL (PO PRAWEJ STRONIE) */
+        /* LIVE BETS PANEL (TYLKO DLA RULETKI) */
         .live-bets-panel {
             background: var(--card-bg);
             border-radius: 16px;
@@ -180,15 +207,15 @@
 
 <div class="container">
     <div id="login-screen" class="game-panel" style="max-width:400px; margin: 100px auto; text-align:center;">
-        <h2 style="color:var(--gold)">Royal Casino Pro</h2>
-        <p style="color:#aaa;">Zaloguj się i odbierz startowe <strong>$1 000</strong>!</p>
+        <h2 style="color:var(--gold)">NapletoCasino</h2>
+        <p style="color:#aaa;">Zaloguj się i odbierz darmowe <strong>$1 000</strong>!</p>
         <input type="text" id="nick-input" placeholder="Twój Pseudonim..." style="width:100%; margin-bottom:15px;">
-        <button class="btn btn-gold" style="width:100%" onclick="login()">Zagraj teraz</button>
+        <button class="btn btn-gold" style="width:100%" onclick="login()">Dołącz do Gry</button>
     </div>
 
     <div id="main-screen" class="hidden">
         <div class="navbar">
-            <div class="brand">🎰 ROYAL CASINO</div>
+            <div class="brand">🎰 NapletoCasino</div>
             <div class="user-info">
                 <span>Gracz: <strong id="u-nick"></strong></span>
                 <div class="balance-badge">Saldo: $<span id="u-balance">0</span></div>
@@ -196,7 +223,7 @@
         </div>
 
         <div class="nav-tabs">
-            <button class="tab-btn active" onclick="switchTab('roulette')">Ruletka Europejska</button>
+            <button class="tab-btn active" onclick="switchTab('roulette')">Ruletka Live</button>
             <button class="tab-btn" onclick="switchTab('blackjack')">Blackjack</button>
         </div>
 
@@ -204,9 +231,15 @@
             <div>
                 <!-- RULETKA PANEL -->
                 <div id="tab-roulette" class="game-panel">
+                    <!-- Pasek historii ruletki -->
+                    <div class="history-container">
+                        <div class="history-title">Ostatnie wyniki:</div>
+                        <div class="history-list" id="r-history"></div>
+                    </div>
+
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="margin:0;">Ruletka Live</h3>
-                        <div>Następne losowanie za: <strong id="r-timer" style="color:var(--gold); font-size:1.2rem;">15s</strong></div>
+                        <h3 style="margin:0;">Ruletka</h3>
+                        <div>Losowanie za: <strong id="r-timer" style="color:var(--gold); font-size:1.2rem;">15s</strong></div>
                     </div>
 
                     <div class="roulette-wrapper">
@@ -262,9 +295,9 @@
                 </div>
             </div>
 
-            <!-- PODGLĄD ZAKŁADÓW NA ŻYWO (PO PRAWEJ) -->
-            <div class="live-bets-panel">
-                <div class="live-bets-title">🟢 Zakłady na Żywo</div>
+            <!-- PODGLĄD ZAKŁADÓW NA ŻYWO (TYLKO RULETKA) -->
+            <div class="live-bets-panel" id="live-panel-container">
+                <div class="live-bets-title">🎲 Zakłady Ruletki</div>
                 <div class="live-bets-list" id="live-bets-list">
                     <!-- Zakłady będą pojawiać się tutaj dynamicznie -->
                 </div>
@@ -299,9 +332,7 @@
     const REDS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
     let myNick = '', myBalance = 0;
 
-    // Struktura sekwencji paska ruletki
     const rouletteOrder = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
-    let fullTapeList = [];
 
     function notify(msg, type = 'info') {
         const area = document.getElementById('notif-area');
@@ -329,6 +360,7 @@
 
         buildRouletteTable();
         buildRouletteTape();
+        renderHistory(data.history);
 
         if (data.currentBets) {
             data.currentBets.forEach(renderLiveBet);
@@ -356,6 +388,19 @@
         }
     }
 
+    /* HISTORIA RULETKI */
+    function renderHistory(history) {
+        const hList = document.getElementById('r-history');
+        hList.innerHTML = '';
+        history.forEach(num => {
+            const item = document.createElement('div');
+            let bg = num === 0 ? 'bg-green' : (REDS.includes(num) ? 'bg-red' : 'bg-black');
+            item.className = `history-item ${bg}`;
+            item.innerText = num;
+            hList.appendChild(item);
+        });
+    }
+
     /* RULETKA ENGINE */
     function buildRouletteTable() {
         const table = document.getElementById('r-table');
@@ -374,12 +419,9 @@
     function buildRouletteTape() {
         const tape = document.getElementById('r-tape');
         tape.innerHTML = '';
-        fullTapeList = [];
 
-        // Generowanie wielokrotnie powtórzonej sekwencji dla zachowania płynności
         for (let r = 0; r < 6; r++) {
             rouletteOrder.forEach(n => {
-                fullTapeList.push(n);
                 const card = document.createElement('div');
                 let bg = n === 0 ? 'bg-green' : (REDS.includes(n) ? 'bg-red' : 'bg-black');
                 card.className = `r-card ${bg}`;
@@ -398,15 +440,11 @@
 
     socket.on('timer-tick', t => document.getElementById('r-timer').innerText = t + 's');
 
-    // DOKŁADNE PRECYZYJNE OBLICZANIE WEKTORA ZATRZYMANIA KARTY
     socket.on('roulette-spin', (data) => {
         const tape = document.getElementById('r-tape');
-        const cardWidth = 70; // 60px szerokości + 10px łącznego marginesu
-        
-        // Zawsze zatrzymuj w 4. zestawie sekwencji (dla idealnego efektu zakręcenia)
+        const cardWidth = 70;
         const targetSetIndex = 3 * rouletteOrder.length + rouletteOrder.indexOf(data.winningNumber);
         
-        // Obliczenie dokładnego offsetu do wycentrowania karty na środku paska
         const wrapperWidth = document.querySelector('.roulette-wrapper').offsetWidth;
         const centerOffset = (wrapperWidth / 2) - (cardWidth / 2);
         const finalTransform = (targetSetIndex * cardWidth) - centerOffset;
@@ -415,14 +453,15 @@
         tape.style.transform = `translateX(-${finalTransform}px)`;
     });
 
-    socket.on('roulette-reset', () => {
+    socket.on('roulette-reset', (data) => {
         const tape = document.getElementById('r-tape');
         tape.style.transition = 'none';
         tape.style.transform = 'translateX(0px)';
-        document.getElementById('live-bets-list').innerHTML = ''; // Wyczyszczenie paska po rundzie
+        document.getElementById('live-bets-list').innerHTML = '';
+        if (data.history) renderHistory(data.history);
     });
 
-    /* PASEK ZAKŁADÓW LIVE */
+    /* PASEK ZAKŁADÓW LIVE (TYLKO RULETKA) */
     socket.on('new-live-bet', (bet) => {
         renderLiveBet(bet);
     });
