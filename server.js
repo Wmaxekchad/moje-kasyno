@@ -30,7 +30,6 @@ function logEvent(text) {
     io.emit('admin-log', entry);
 }
 
-// STRUKTURA RULETKI EUROPEJSKIEJ (0 - 36)
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
 
 let rouletteState = {
@@ -38,7 +37,7 @@ let rouletteState = {
     status: 'WAITING',
     forcedResult: null,
     history: [12, 35, 0, 7, 22, 18, 2, 29],
-    bets: {} // idSocket: { betsArray: [] }
+    bets: [] // [{ nick, type, value, amount, color }]
 };
 
 // Pętla Ruletki
@@ -68,51 +67,46 @@ function spinRoulette() {
 
     setTimeout(() => {
         // Rozliczenie zakładów
-        for (let socketId in rouletteState.bets) {
-            let pBets = rouletteState.bets[socketId];
-            let socket = io.sockets.sockets.get(socketId);
-            if (!socket || !socket.nick || !db.players[socket.nick]) continue;
+        rouletteState.bets.forEach(bet => {
+            let socket = Array.from(io.sockets.sockets.values()).find(s => s.nick === bet.nick);
+            if (!socket || !db.players[bet.nick]) return;
 
-            let totalWin = 0;
-            pBets.forEach(bet => {
-                let won = false;
-                let multiplier = 0;
+            let won = false;
+            let multiplier = 0;
 
-                if (bet.type === 'number' && parseInt(bet.value) === winningNumber) {
-                    won = true; multiplier = 36;
-                } else if (bet.type === 'color' && bet.value === winningColor) {
-                    won = true; multiplier = 2;
-                } else if (bet.type === 'even' && winningNumber !== 0 && winningNumber % 2 === 0) {
-                    won = true; multiplier = 2;
-                } else if (bet.type === 'odd' && winningNumber % 2 !== 0) {
-                    won = true; multiplier = 2;
-                } else if (bet.type === 'doz1' && winningNumber >= 1 && winningNumber <= 12) {
-                    won = true; multiplier = 3;
-                } else if (bet.type === 'doz2' && winningNumber >= 13 && winningNumber <= 24) {
-                    won = true; multiplier = 3;
-                } else if (bet.type === 'doz3' && winningNumber >= 25 && winningNumber <= 36) {
-                    won = true; multiplier = 3;
-                } else if (bet.type === 'half1' && winningNumber >= 1 && winningNumber <= 18) {
-                    won = true; multiplier = 2;
-                } else if (bet.type === 'half2' && winningNumber >= 19 && winningNumber <= 36) {
-                    won = true; multiplier = 2;
-                }
-
-                if (won) totalWin += bet.amount * multiplier;
-            });
-
-            if (totalWin > 0) {
-                db.players[socket.nick].balance += totalWin;
-                socket.emit('notification', { type: 'success', msg: `Wygrałeś $${totalWin.toLocaleString()} w ruletce!` });
-                logEvent(`Gracz ${socket.nick} wygrał $${totalWin} w ruletce.`);
+            if (bet.type === 'number' && parseInt(bet.value) === winningNumber) {
+                won = true; multiplier = 36;
+            } else if (bet.type === 'color' && bet.value === winningColor) {
+                won = true; multiplier = 2;
+            } else if (bet.type === 'even' && winningNumber !== 0 && winningNumber % 2 === 0) {
+                won = true; multiplier = 2;
+            } else if (bet.type === 'odd' && winningNumber % 2 !== 0) {
+                won = true; multiplier = 2;
+            } else if (bet.type === 'doz1' && winningNumber >= 1 && winningNumber <= 12) {
+                won = true; multiplier = 3;
+            } else if (bet.type === 'doz2' && winningNumber >= 13 && winningNumber <= 24) {
+                won = true; multiplier = 3;
+            } else if (bet.type === 'doz3' && winningNumber >= 25 && winningNumber <= 36) {
+                won = true; multiplier = 3;
+            } else if (bet.type === 'half1' && winningNumber >= 1 && winningNumber <= 18) {
+                won = true; multiplier = 2;
+            } else if (bet.type === 'half2' && winningNumber >= 19 && winningNumber <= 36) {
+                won = true; multiplier = 2;
             }
-        }
+
+            if (won) {
+                let winAmount = bet.amount * multiplier;
+                db.players[bet.nick].balance += winAmount;
+                socket.emit('notification', { type: 'success', msg: `Wygrałeś $${winAmount.toLocaleString()} w ruletce!` });
+                socket.emit('balance-update', db.players[bet.nick].balance);
+            }
+        });
 
         saveDB();
         rouletteState.history.unshift(winningNumber);
-        if (rouletteState.history.length > 12) rouletteState.history.pop();
+        if (rouletteState.history.length > 10) rouletteState.history.pop();
 
-        rouletteState.bets = {};
+        rouletteState.bets = [];
         rouletteState.timer = 15;
         rouletteState.status = 'WAITING';
 
@@ -123,7 +117,7 @@ function spinRoulette() {
     }, 6000);
 }
 
-// ENGINE BLACKJACKA
+// BLACKJACK ENGINE
 const blackjackGames = {};
 
 function createDeck() {
@@ -131,25 +125,19 @@ function createDeck() {
     const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
     let deck = [];
     for (let s of suits) {
-        for (let v of values) {
-            deck.push({ suit: s, value: v });
-        }
+        for (let v of values) deck.push({ suit: s, value: v });
     }
     return deck.sort(() => Math.random() - 0.5);
 }
 
 function calculateHand(hand) {
-    let score = 0;
-    let aces = 0;
+    let score = 0, aces = 0;
     for (let card of hand) {
         if (['J', 'Q', 'K'].includes(card.value)) score += 10;
         else if (card.value === 'A') { score += 11; aces++; }
         else score += parseInt(card.value);
     }
-    while (score > 21 && aces > 0) {
-        score -= 10;
-        aces--;
-    }
+    while (score > 21 && aces > 0) { score -= 10; aces--; }
     return score;
 }
 
@@ -177,7 +165,6 @@ io.on('connection', (socket) => {
         socket.nick = cleanNick;
 
         if (!db.players[cleanNick]) {
-            // STARTOWY BALANS = 1000$
             db.players[cleanNick] = { balance: 1000, createdAt: new Date() };
             saveDB();
             logEvent(`Nowy gracz: ${cleanNick} (Otrzymał $1 000)`);
@@ -188,13 +175,13 @@ io.on('connection', (socket) => {
             balance: db.players[cleanNick].balance,
             isAdmin: socket.isAdmin,
             history: rouletteState.history,
-            timer: rouletteState.timer
+            timer: rouletteState.timer,
+            currentBets: rouletteState.bets
         });
 
         io.emit('admin-players-update', getOnlinePlayersData());
     });
 
-    // ZAKŁADY RULETKI (Zasada 1 zakładu na ten sam typ)
     socket.on('place-roulette-bet', (data) => {
         if (!socket.nick || rouletteState.status !== 'WAITING' || rouletteState.timer <= 2) return;
         
@@ -205,30 +192,31 @@ io.on('connection', (socket) => {
             return socket.emit('notification', { type: 'error', msg: 'Brak wystarczających środków!' });
         }
 
-        if (!rouletteState.bets[socket.id]) rouletteState.bets[socket.id] = [];
-        let userBets = rouletteState.bets[socket.id];
-
-        // Sprawdzenie limitu kolorów (Czerwony / Czarny)
         if (data.type === 'color') {
-            let existingColorBet = userBets.find(b => b.type === 'color');
-            if (existingColorBet) {
-                return socket.emit('notification', { type: 'error', msg: 'Postawiłeś już zakład na kolor w tej rundzie!' });
+            let hasColorBet = rouletteState.bets.some(b => b.nick === socket.nick && b.type === 'color');
+            if (hasColorBet) {
+                return socket.emit('notification', { type: 'error', msg: 'Obstawiłeś już kolor w tej rundzie!' });
             }
         }
 
         player.balance -= amount;
         saveDB();
 
-        userBets.push({ type: data.type, value: data.value, amount });
+        const newBet = {
+            nick: socket.nick,
+            type: data.type,
+            value: data.value,
+            amount: amount
+        };
 
-        logEvent(`${socket.nick} obstawił $${amount} w ruletce na [${data.type}: ${data.value}]`);
-        
+        rouletteState.bets.push(newBet);
+
         socket.emit('balance-update', player.balance);
+        io.emit('new-live-bet', newBet);
         io.emit('admin-players-update', getOnlinePlayersData());
-        socket.emit('notification', { type: 'info', msg: `Zakład przyjęty ($${amount})` });
     });
 
-    // SILNIK BLACKJACKA
+    // BLACKJACK HANDLERS
     socket.on('bj-start', (betAmount) => {
         const player = db.players[socket.nick];
         betAmount = parseInt(betAmount);
@@ -244,9 +232,7 @@ io.on('connection', (socket) => {
         const playerHand = [deck.pop(), deck.pop()];
         const dealerHand = [deck.pop(), deck.pop()];
 
-        blackjackGames[socket.id] = {
-            deck, playerHand, dealerHand, bet: betAmount, status: 'PLAYING'
-        };
+        blackjackGames[socket.id] = { deck, playerHand, dealerHand, bet: betAmount, status: 'PLAYING' };
 
         socket.emit('balance-update', player.balance);
         socket.emit('bj-state', {
@@ -268,7 +254,6 @@ io.on('connection', (socket) => {
 
         if (pScore > 21) {
             game.status = 'LOST';
-            logEvent(`Blackjack: ${socket.nick} przegrał (Przekroczono 21)`);
             socket.emit('bj-state', {
                 playerHand: game.playerHand,
                 dealerHand: game.dealerHand,
@@ -301,8 +286,7 @@ io.on('connection', (socket) => {
         }
 
         const pScore = calculateHand(game.playerHand);
-        let winStatus = '';
-        let payout = 0;
+        let winStatus = '', payout = 0;
 
         if (dScore > 21 || pScore > dScore) {
             winStatus = 'WIN';
@@ -320,8 +304,6 @@ io.on('connection', (socket) => {
             socket.emit('balance-update', db.players[socket.nick].balance);
         }
 
-        logEvent(`Blackjack: ${socket.nick} zakończył z wynikiem ${pScore} vs Dealer ${dScore} (${winStatus})`);
-
         socket.emit('bj-state', {
             playerHand: game.playerHand,
             dealerHand: game.dealerHand,
@@ -335,13 +317,12 @@ io.on('connection', (socket) => {
         delete blackjackGames[socket.id];
     });
 
-    // PANEL ADMINA
+    // ADMIN HANDLERS
     socket.on('admin-set-balance', (data) => {
         if (!socket.isAdmin) return;
         if (db.players[data.nick]) {
             db.players[data.nick].balance = parseInt(data.balance);
             saveDB();
-            logEvent(`ADMIN zmienił saldo gracza ${data.nick} na $${data.balance}`);
             io.emit('admin-players-update', getOnlinePlayersData());
         }
     });
@@ -349,7 +330,7 @@ io.on('connection', (socket) => {
     socket.on('admin-force-result', (num) => {
         if (!socket.isAdmin) return;
         rouletteState.forcedResult = parseInt(num);
-        logEvent(`ADMIN ustawił wymuszony wynik ruletki: ${num}`);
+        logEvent(`ADMIN ustawił wynik ruletki: ${num}`);
     });
 });
 
