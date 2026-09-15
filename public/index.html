@@ -13,6 +13,7 @@
             --red: #e74c3c;
             --black: #2c3e50;
             --green: #2ecc71;
+            --blue: #3498db;
         }
 
         * { box-sizing: border-box; font-family: 'Poppins', sans-serif; }
@@ -61,95 +62,26 @@
         .notif { padding: 12px 20px; border-radius: 8px; margin-bottom: 10px; color: #fff; font-weight: 600; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
         .notif-success { background: var(--green); }
         .notif-error { background: var(--red); }
-        .notif-info { background: #3498db; }
+        .notif-info { background: var(--blue); }
 
-        /* LAYOUT GRID Z PASEM DLA RULETKI */
-        .layout-grid {
-            display: grid;
-            grid-template-columns: 1fr 320px;
-            gap: 20px;
-        }
-
+        .layout-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
         .game-panel { background: var(--card-bg); border-radius: 16px; padding: 25px; border: 1px solid rgba(255,255,255,0.05); }
 
-        /* HISTORIA RULETKI (GÓRA) */
-        .history-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: rgba(0,0,0,0.4);
-            padding: 10px 15px;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            border: 1px solid rgba(255,255,255,0.05);
-        }
-
+        /* RULETKA CSS */
+        .history-container { display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.4); padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.05); }
         .history-title { font-size: 0.85rem; color: #888; font-weight: 600; text-transform: uppercase; }
         .history-list { display: flex; gap: 8px; overflow-x: auto; }
-        .history-item {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 0.85rem;
-            flex-shrink: 0;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-        }
+        .history-item { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
 
-        /* PRECYZYJNA ANIMACJA RULETKI */
-        .roulette-wrapper {
-            position: relative;
-            height: 90px;
-            background: #050608;
-            border-radius: 12px;
-            overflow: hidden;
-            border: 2px solid var(--gold);
-            margin-bottom: 20px;
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
-        }
-
-        .roulette-pin {
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 4px;
-            height: 100%;
-            background: var(--gold);
-            z-index: 10;
-            box-shadow: 0 0 12px var(--gold);
-        }
-
-        .roulette-tape {
-            display: flex;
-            position: absolute;
-            top: 10px;
-            height: 70px;
-            will-change: transform;
-        }
-
-        .r-card {
-            width: 60px;
-            height: 70px;
-            margin: 0 5px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 1.3rem;
-            flex-shrink: 0;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-        }
+        .roulette-wrapper { position: relative; height: 90px; background: #050608; border-radius: 12px; overflow: hidden; border: 2px solid var(--gold); margin-bottom: 20px; box-shadow: inset 0 0 20px rgba(0,0,0,0.8); }
+        .roulette-pin { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 4px; height: 100%; background: var(--gold); z-index: 10; box-shadow: 0 0 12px var(--gold); }
+        .roulette-tape { display: flex; position: absolute; top: 10px; height: 70px; will-change: transform; }
+        .r-card { width: 60px; height: 70px; margin: 0 5px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.3rem; flex-shrink: 0; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
 
         .bg-red { background: var(--red); }
         .bg-black { background: var(--black); }
         .bg-green { background: var(--green); }
 
-        /* STÓŁ RULETKI */
         .roulette-table { display: grid; grid-template-columns: 60px repeat(12, 1fr); gap: 6px; margin-top: 20px; }
         .grid-btn { padding: 14px 2px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); transition: 0.2s; user-select: none; }
         .grid-btn:hover { transform: translateY(-2px); filter: brightness(1.25); }
@@ -158,36 +90,30 @@
         .extra-bets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
         .color-bets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
 
-        /* LIVE BETS PANEL (TYLKO DLA RULETKI) */
-        .live-bets-panel {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 20px;
-            border: 1px solid rgba(255,255,255,0.05);
-            display: flex;
-            flex-direction: column;
-            max-height: 650px;
-        }
+        /* LIVE PANEL */
+        .side-panel { background: var(--card-bg); border-radius: 16px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; max-height: 700px; }
+        .panel-title { font-size: 1.1rem; font-weight: 700; color: var(--gold); margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
+        .side-list { overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 8px; }
+        .live-bet-item { background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; border-left: 3px solid var(--gold); }
 
-        .live-bets-title { font-size: 1.1rem; font-weight: 700; color: var(--gold); margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
-        .live-bets-list { overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 8px; }
-
-        .live-bet-item {
-            background: rgba(0,0,0,0.4);
-            padding: 10px;
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.85rem;
-            border-left: 3px solid var(--gold);
-        }
-
-        /* BLACKJACK UI */
+        /* BLACKJACK CSS */
         .bj-table { text-align: center; }
         .cards-container { display: flex; justify-content: center; gap: 10px; margin: 20px 0; }
         .card { width: 75px; height: 105px; background: #fff; color: #000; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; padding: 8px; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         .card.red-card { color: var(--red); }
+
+        /* BUKMACHER CSS */
+        .match-card { background: rgba(0,0,0,0.4); border-radius: 10px; padding: 15px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.05); }
+        .match-header { font-size: 0.8rem; color: var(--gold); font-weight: 600; text-transform: uppercase; margin-bottom: 5px; }
+        .match-teams { font-size: 1.05rem; font-weight: bold; margin-bottom: 12px; }
+        .odds-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .odd-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 8px; border-radius: 6px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .odd-btn:hover, .odd-btn.selected { background: var(--gold); color: #000; font-weight: bold; }
+        .odd-btn span { display: block; font-size: 0.75rem; opacity: 0.8; }
+
+        /* KUPON CSS */
+        .coupon-item { background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; margin-bottom: 8px; font-size: 0.85rem; border-left: 3px solid var(--blue); position: relative; }
+        .coupon-remove { position: absolute; right: 8px; top: 8px; cursor: pointer; color: var(--red); font-weight: bold; }
 
         .btn { padding: 12px 24px; border-radius: 8px; border: none; font-weight: 700; cursor: pointer; transition: 0.2s; }
         .btn-gold { background: var(--gold); color: #000; }
@@ -225,13 +151,13 @@
         <div class="nav-tabs">
             <button class="tab-btn active" onclick="switchTab('roulette')">Ruletka Live</button>
             <button class="tab-btn" onclick="switchTab('blackjack')">Blackjack</button>
+            <button class="tab-btn" onclick="switchTab('sports')">⚽ Bukmacher</button>
         </div>
 
         <div class="layout-grid">
             <div>
                 <!-- RULETKA PANEL -->
                 <div id="tab-roulette" class="game-panel">
-                    <!-- Pasek historii ruletki -->
                     <div class="history-container">
                         <div class="history-title">Ostatnie wyniki:</div>
                         <div class="history-list" id="r-history"></div>
@@ -293,13 +219,49 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- BUKMACHER PANEL -->
+                <div id="tab-sports" class="game-panel hidden">
+                    <h3>Zakłady Sportowe i Esportowe</h3>
+                    <div id="sports-matches-list">
+                        <!-- Mecze wczytywane dynamicznie -->
+                    </div>
+                </div>
             </div>
 
-            <!-- PODGLĄD ZAKŁADÓW NA ŻYWO (TYLKO RULETKA) -->
-            <div class="live-bets-panel" id="live-panel-container">
-                <div class="live-bets-title">🎲 Zakłady Ruletki</div>
-                <div class="live-bets-list" id="live-bets-list">
-                    <!-- Zakłady będą pojawiać się tutaj dynamicznie -->
+            <!-- PANEL BOCZNY (ZAKŁADY RULETKI / KUPON BUKMACHERSKI) -->
+            <div>
+                <!-- LIVE BETS RULETKA -->
+                <div class="side-panel" id="side-roulette-panel">
+                    <div class="panel-title">🎲 Zakłady Ruletki</div>
+                    <div class="side-list" id="live-bets-list"></div>
+                </div>
+
+                <!-- KUPON BUKMACHER -->
+                <div class="side-panel hidden" id="side-sports-panel">
+                    <div class="panel-title">📜 Twój Kupon</div>
+                    <div class="side-list" id="coupon-list">
+                        <p style="color:#aaa; font-size:0.85rem; text-align:center;">Kliknij kurs meczu, aby dodać typ do kuponu.</p>
+                    </div>
+
+                    <div style="margin-top:15px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                            <span>Łączny Kurs:</span>
+                            <strong id="coupon-total-odds" style="color:var(--gold);">1.00</strong>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <span>Stawka:</span>
+                            <input type="number" id="coupon-stake" value="100" min="10" style="width:100px; padding:6px;" oninput="updateCouponCalc()">
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                            <span>Ewentualna Wygrana:</span>
+                            <strong id="coupon-win" style="color:var(--green); font-size:1.1rem;">$0</strong>
+                        </div>
+                        <button class="btn btn-gold" style="width:100%" onclick="placeSportsCoupon()">Postaw Kupon</button>
+                    </div>
+
+                    <div class="panel-title" style="margin-top:20px;">📂 Moje Kupony</div>
+                    <div class="side-list" id="my-coupons-list"></div>
                 </div>
             </div>
         </div>
@@ -307,13 +269,16 @@
         <!-- PANEL ADMINA -->
         <div id="admin-panel" class="admin-card hidden">
             <h3 style="color:var(--gold); margin-top:0;">⚡ Panel Administratora</h3>
-            <div style="display:flex; gap:20px;">
+            <div style="display:flex; gap:20px; flex-wrap:wrap;">
                 <div>
                     <label>Wymuś wynik ruletki (0-36):</label><br>
                     <input type="number" id="admin-num" min="0" max="36" style="width:100px;">
                     <button class="btn btn-gold" onclick="forceAdminNum()">Ustaw</button>
                 </div>
             </div>
+
+            <h4>Rozstrzyganie Meczów Bukmacherskich:</h4>
+            <div id="admin-sports-list"></div>
 
             <h4>Gracze Online:</h4>
             <table>
@@ -331,8 +296,11 @@
     const socket = io();
     const REDS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
     let myNick = '', myBalance = 0;
-
     const rouletteOrder = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+
+    let currentMatches = [];
+    let myCouponSelections = [];
+    let myCoupons = [];
 
     function notify(msg, type = 'info') {
         const area = document.getElementById('notif-area');
@@ -351,6 +319,9 @@
     socket.on('init-player', (data) => {
         myNick = data.nick;
         myBalance = data.balance;
+        currentMatches = data.sportsMatches || [];
+        myCoupons = data.coupons || [];
+
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('main-screen').classList.remove('hidden');
         document.getElementById('u-nick').innerText = myNick;
@@ -362,9 +333,9 @@
         buildRouletteTape();
         renderHistory(data.history);
 
-        if (data.currentBets) {
-            data.currentBets.forEach(renderLiveBet);
-        }
+        if (data.currentBets) data.currentBets.forEach(renderLiveBet);
+        renderSportsMatches();
+        renderMyCoupons();
     });
 
     socket.on('balance-update', (bal) => {
@@ -378,17 +349,25 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.getElementById('tab-roulette').classList.add('hidden');
         document.getElementById('tab-blackjack').classList.add('hidden');
+        document.getElementById('tab-sports').classList.add('hidden');
+
+        document.getElementById('side-roulette-panel').classList.add('hidden');
+        document.getElementById('side-sports-panel').classList.add('hidden');
 
         if (tab === 'roulette') {
             document.getElementById('tab-roulette').classList.remove('hidden');
-            event.target.classList.add('active');
-        } else {
+            document.getElementById('side-roulette-panel').classList.remove('hidden');
+        } else if (tab === 'blackjack') {
             document.getElementById('tab-blackjack').classList.remove('hidden');
-            event.target.classList.add('active');
+            document.getElementById('side-roulette-panel').classList.remove('hidden');
+        } else if (tab === 'sports') {
+            document.getElementById('tab-sports').classList.remove('hidden');
+            document.getElementById('side-sports-panel').classList.remove('hidden');
         }
+        event.target.classList.add('active');
     }
 
-    /* HISTORIA RULETKI */
+    /* RULETKA */
     function renderHistory(history) {
         const hList = document.getElementById('r-history');
         hList.innerHTML = '';
@@ -401,11 +380,9 @@
         });
     }
 
-    /* RULETKA ENGINE */
     function buildRouletteTable() {
         const table = document.getElementById('r-table');
         table.innerHTML = '<div class="grid-btn zero-btn" onclick="placeRBet(\'number\', 0)">0</div>';
-        
         for (let i = 1; i <= 36; i++) {
             const isRed = REDS.includes(i);
             const btn = document.createElement('div');
@@ -419,7 +396,6 @@
     function buildRouletteTape() {
         const tape = document.getElementById('r-tape');
         tape.innerHTML = '';
-
         for (let r = 0; r < 6; r++) {
             rouletteOrder.forEach(n => {
                 const card = document.createElement('div');
@@ -432,19 +408,16 @@
     }
 
     function setBet(v) { document.getElementById('r-bet-amount').value = v; }
-
     function placeRBet(type, value) {
         const amount = parseInt(document.getElementById('r-bet-amount').value);
         socket.emit('place-roulette-bet', { type, value, amount });
     }
 
     socket.on('timer-tick', t => document.getElementById('r-timer').innerText = t + 's');
-
     socket.on('roulette-spin', (data) => {
         const tape = document.getElementById('r-tape');
         const cardWidth = 70;
         const targetSetIndex = 3 * rouletteOrder.length + rouletteOrder.indexOf(data.winningNumber);
-        
         const wrapperWidth = document.querySelector('.roulette-wrapper').offsetWidth;
         const centerOffset = (wrapperWidth / 2) - (cardWidth / 2);
         const finalTransform = (targetSetIndex * cardWidth) - centerOffset;
@@ -461,30 +434,17 @@
         if (data.history) renderHistory(data.history);
     });
 
-    /* PASEK ZAKŁADÓW LIVE (TYLKO RULETKA) */
-    socket.on('new-live-bet', (bet) => {
-        renderLiveBet(bet);
-    });
-
+    socket.on('new-live-bet', renderLiveBet);
     function renderLiveBet(bet) {
         const list = document.getElementById('live-bets-list');
         const item = document.createElement('div');
         item.className = 'live-bet-item';
-        item.innerHTML = `
-            <div>
-                <strong>${bet.nick}</strong><br>
-                <small style="color:#aaa;">${bet.type}: ${bet.value}</small>
-            </div>
-            <div style="color:var(--gold); font-weight:bold;">$${bet.amount.toLocaleString()}</div>
-        `;
+        item.innerHTML = `<div><strong>${bet.nick}</strong><br><small style="color:#aaa;">${bet.type}: ${bet.value}</small></div><div style="color:var(--gold); font-weight:bold;">$${bet.amount.toLocaleString()}</div>`;
         list.prepend(item);
     }
 
-    /* BLACKJACK HANDLERS */
-    function startBlackjack() {
-        const amount = document.getElementById('bj-bet-amount').value;
-        socket.emit('bj-start', amount);
-    }
+    /* BLACKJACK */
+    function startBlackjack() { socket.emit('bj-start', document.getElementById('bj-bet-amount').value); }
     function bjHit() { socket.emit('bj-hit'); }
     function bjStand() { socket.emit('bj-stand'); }
 
@@ -525,7 +485,126 @@
         });
     }
 
-    /* ADMIN HANDLERS */
+    /* BUKMACHER */
+    socket.on('sports-matches-update', (matches) => {
+        currentMatches = matches;
+        renderSportsMatches();
+        renderAdminSports();
+    });
+
+    function renderSportsMatches() {
+        const list = document.getElementById('sports-matches-list');
+        list.innerHTML = '';
+
+        currentMatches.filter(m => m.status === 'OPEN').forEach(m => {
+            const el = document.createElement('div');
+            el.className = 'match-card';
+            el.innerHTML = `
+                <div class="match-header">${m.sport}</div>
+                <div class="match-teams">${m.team1} vs ${m.team2}</div>
+                <div class="odds-row">
+                    <div class="odd-btn" onclick="addToCoupon(${m.id}, '1', ${m.odds['1']}, '${m.team1} vs ${m.team2}')">
+                        <span>1 (${m.team1})</span> <strong>${m.odds['1']}</strong>
+                    </div>
+                    ${m.odds['X'] ? `
+                    <div class="odd-btn" onclick="addToCoupon(${m.id}, 'X', ${m.odds['X']}, '${m.team1} vs ${m.team2}')">
+                        <span>X (Remis)</span> <strong>${m.odds['X']}</strong>
+                    </div>` : ''}
+                    <div class="odd-btn" onclick="addToCoupon(${m.id}, '2', ${m.odds['2']}, '${m.team1} vs ${m.team2}')">
+                        <span>2 (${m.team2})</span> <strong>${m.odds['2']}</strong>
+                    </div>
+                </div>
+            `;
+            list.appendChild(el);
+        });
+    }
+
+    function addToCoupon(matchId, pick, odds, matchName) {
+        myCouponSelections = myCouponSelections.filter(s => s.matchId !== matchId);
+        myCouponSelections.push({ matchId, pick, odds: parseFloat(odds), matchName });
+        renderCoupon();
+    }
+
+    function removeFromCoupon(matchId) {
+        myCouponSelections = myCouponSelections.filter(s => s.matchId !== matchId);
+        renderCoupon();
+    }
+
+    function renderCoupon() {
+        const list = document.getElementById('coupon-list');
+        if (myCouponSelections.length === 0) {
+            list.innerHTML = '<p style="color:#aaa; font-size:0.85rem; text-align:center;">Kliknij kurs meczu, aby dodać typ do kuponu.</p>';
+        } else {
+            list.innerHTML = '';
+            myCouponSelections.forEach(s => {
+                const item = document.createElement('div');
+                item.className = 'coupon-item';
+                item.innerHTML = `
+                    <span class="coupon-remove" onclick="removeFromCoupon(${s.matchId})">✕</span>
+                    <strong>${s.matchName}</strong><br>
+                    Typ: <span style="color:var(--gold); font-weight:bold;">${s.pick}</span> @ <strong>${s.odds}</strong>
+                `;
+                list.appendChild(item);
+            });
+        }
+        updateCouponCalc();
+    }
+
+    function updateCouponCalc() {
+        let totalOdds = 1.0;
+        myCouponSelections.forEach(s => totalOdds *= s.odds);
+        if (myCouponSelections.length === 0) totalOdds = 1.0;
+
+        const stake = parseInt(document.getElementById('coupon-stake').value) || 0;
+        const win = Math.floor(stake * totalOdds);
+
+        document.getElementById('coupon-total-odds').innerText = totalOdds.toFixed(2);
+        document.getElementById('coupon-win').innerText = '$' + win.toLocaleString();
+    }
+
+    function placeSportsCoupon() {
+        if (myCouponSelections.length === 0) return notify('Twój kupon jest pusty!', 'error');
+        const stake = parseInt(document.getElementById('coupon-stake').value);
+        let totalOdds = 1.0;
+        myCouponSelections.forEach(s => totalOdds *= s.odds);
+
+        socket.emit('place-sports-coupon', {
+            selections: myCouponSelections,
+            stake: stake,
+            totalOdds: parseFloat(totalOdds.toFixed(2))
+        });
+    }
+
+    socket.on('coupon-placed-success', (coupon) => {
+        myCoupons.unshift(coupon);
+        myCouponSelections = [];
+        renderCoupon();
+        renderMyCoupons();
+    });
+
+    function renderMyCoupons() {
+        const list = document.getElementById('my-coupons-list');
+        list.innerHTML = '';
+        myCoupons.forEach(c => {
+            const item = document.createElement('div');
+            let statusColor = c.status === 'WON' ? 'var(--green)' : (c.status === 'LOST' ? 'var(--red)' : 'var(--gold)');
+            let statusText = c.status === 'WON' ? 'WYGRANA' : (c.status === 'LOST' ? 'PRZEGRANA' : 'W TRAKCIE');
+
+            item.className = 'coupon-item';
+            item.style.borderLeftColor = statusColor;
+            item.innerHTML = `
+                <div style="display:flex; justify-content:space-between;">
+                    <small style="color:#aaa;">${c.id}</small>
+                    <strong style="color:${statusColor}">${statusText}</strong>
+                </div>
+                <div>Stawka: $${c.stake} | Kurs: ${c.totalOdds}</div>
+                <div style="color:var(--green); font-weight:bold;">Wygrana: $${c.potentialWin.toLocaleString()}</div>
+            `;
+            list.appendChild(item);
+        });
+    }
+
+    /* ADMIN */
     socket.on('admin-players-update', (players) => {
         const body = document.getElementById('admin-players-list');
         if (!body) return;
@@ -539,7 +618,31 @@
                 <td><button onclick="setAdminBalance('${p.nick}')">Edytuj Saldo</button></td>
             </tr>`;
         }
+        renderAdminSports();
     });
+
+    function renderAdminSports() {
+        const list = document.getElementById('admin-sports-list');
+        if (!list) return;
+        list.innerHTML = '';
+
+        currentMatches.filter(m => m.status === 'OPEN').forEach(m => {
+            list.innerHTML += `
+                <div style="background:#000; padding:8px; margin-bottom:5px; border-radius:5px; display:flex; justify-content:space-between; align-items:center;">
+                    <span>${m.team1} vs ${m.team2}</span>
+                    <div>
+                        <button onclick="adminResolve(${m.id}, '1')">Wygrana 1</button>
+                        ${m.odds['X'] ? `<button onclick="adminResolve(${m.id}, 'X')">Remis X</button>` : ''}
+                        <button onclick="adminResolve(${m.id}, '2')">Wygrana 2</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function adminResolve(matchId, result) {
+        socket.emit('admin-resolve-match', { matchId, result });
+    }
 
     function setAdminBalance(nick) {
         const b = prompt(`Ustaw saldo dla ${nick}:`);
