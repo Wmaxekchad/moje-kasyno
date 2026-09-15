@@ -136,6 +136,7 @@
         <h2 style="color:var(--gold)">NapletoCasino</h2>
         <p style="color:#aaa;">Zaloguj się i odbierz darmowe <strong>$1 000</strong>!</p>
         <input type="text" id="nick-input" placeholder="Twój Pseudonim..." style="width:100%; margin-bottom:15px;">
+        <input type="password" id="admin-password" placeholder="Hasło administratora (opcjonalne)" style="width:100%; margin-bottom:15px;">
         <button class="btn btn-gold" style="width:100%" onclick="login()">Dołącz do Gry</button>
     </div>
 
@@ -312,9 +313,14 @@
     }
 
     function login() {
-        const nick = document.getElementById('nick-input').value;
-        if (nick) socket.emit('set-nickname', nick);
+        const nick = document.getElementById('nick-input').value.trim();
+        const password = document.getElementById('admin-password').value;
+        if (nick) socket.emit('set-nickname', { nick, password });
     }
+
+    socket.on('admin-auth-failed', (data) => {
+        notify(data.msg || 'Błędne dane administratora.', 'error');
+    });
 
     socket.on('init-player', (data) => {
         myNick = data.nick;
