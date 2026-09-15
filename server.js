@@ -15,6 +15,7 @@ const ADMIN_IPS = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
 app.use(express.static(path.join(__dirname, 'public')));
 
 let db = { players: {}, coupons: [] };
+
 if (fs.existsSync(DB_FILE)) {
     try { 
         db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); 
@@ -32,9 +33,10 @@ function logEvent(text) {
     io.emit('admin-log', entry);
 }
 
-// --- RULETKA (BEZ ZMIAN) ---
+// ==========================================
+// --- RULETKA ENGINE ---
+// ==========================================
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
-
 let rouletteState = {
     timer: 15,
     status: 'WAITING',
@@ -108,7 +110,9 @@ function spinRoulette() {
     }, 6000);
 }
 
-// --- BLACKJACK ENGINE (BEZ ZMIAN) ---
+// ==========================================
+// --- BLACKJACK ENGINE ---
+// ==========================================
 const blackjackGames = {};
 
 function createDeck() {
@@ -132,88 +136,192 @@ function calculateHand(hand) {
     return score;
 }
 
-// --- BUKMACHER ENGINE (NOWOŚĆ) ---
-let sportsMatches = [
-    { id: 101, sport: '⚽ Piłka Nożna', team1: 'Real Madryt', team2: 'FC Barcelona', odds: { '1': 2.10, 'X': 3.40, '2': 3.10 }, status: 'OPEN', result: null },
-    { id: 102, sport: '⚽ Piłka Nożna', team1: 'Arsenal', team2: 'Chelsea', odds: { '1': 1.85, 'X': 3.60, '2': 4.20 }, status: 'OPEN', result: null },
-    { id: 103, sport: '🏀 Koszykówka', team1: 'LA Lakers', team2: 'Golden State', odds: { '1': 1.75, 'X': 12.0, '2': 2.15 }, status: 'OPEN', result: null },
-    { id: 104, sport: '🎮 CS2', team1: 'Natus Vincere', team2: 'FaZe Clan', odds: { '1': 1.65, 'X': null, '2': 2.25 }, status: 'OPEN', result: null },
-    { id: 105, sport: '🎾 Tenis', team1: 'Iga Świątek', team2: 'Aryna Sabalenka', odds: { '1': 1.55, 'X': null, '2': 2.45 }, status: 'OPEN', result: null }
-];
+// ==========================================
+// --- BUKMACHER ENGINE (5-MINUTOWY SYSTEM + RYNKI) ---
+// ==========================================
+const SPORTS_DB = {
+    football: [
+        { name: "Real Madryt", rating: 92 }, { name: "FC Barcelona", rating: 89 },
+        { name: "Manchester City", rating: 94 }, { name: "Bayern Monachium", rating: 88 },
+        { name: "Arsenal", rating: 87 }, { name: "PSG", rating: 86 },
+        { name: "Inter Mediolan", rating: 84 }, { name: "BVB Dortmund", rating: 82 }
+    ],
+    basketball: [
+        { name: "Boston Celtics", rating: 91 }, { name: "Denver Nuggets", rating: 89 },
+        { name: "LA Lakers", rating: 85 }, { name: "Golden State Warriors", rating: 84 }
+    ],
+    cs2: [
+        { name: "FaZe Clan", rating: 90 }, { name: "Natus Vincere", rating: 91 },
+        { name: "G2 Esports", rating: 88 }, { name: "Vitality", rating: 89 }
+    ],
+    tennis: [
+        { name: "Iga Świątek", rating: 95 }, { name: "Aryna Sabalenka", rating: 92 },
+        { name: "Jannik Sinner", rating: 94 }, { name: "Carlos Alcaraz", rating: 93 }
+    ]
+};
 
-function generateRandomMatch() {
-    const teams = [
-        ['Manchester City', 'Liverpool'], ['Bayern Monachium', 'Dortmund'],
-        ['G2 Esports', 'Vitality'], ['Boston Celtics', 'Miami Heat']
-    ];
-    const pair = teams[Math.floor(Math.random() * teams.length)];
-    const id = Date.now();
-    const newMatch = {
-        id,
-        sport: '🔥 Mecz Na Żywo',
-        team1: pair[0],
-        team2: pair[1],
-        odds: {
-            '1': (Math.random() * 2 + 1.2).toFixed(2),
-            'X': (Math.random() * 2 + 2.8).toFixed(2),
-            '2': (Math.random() * 2 + 1.5).toFixed(2)
-        },
-        status: 'OPEN',
-        result: null
-    };
-    sportsMatches.push(newMatch);
-    if (sportsMatches.length > 10) sportsMatches.shift();
-    io.emit('sports-matches-update', sportsMatches);
+let sportsTimer = 300; // 5 minut
+let sportsMatches = [];
+
+function calcProbabilities(r1, r2, isDrawAllowed = true) {
+    const diff = r1 - r2;
+    let prob1 = 1 / (1 + Math.pow(10, -diff / 400));
+    let prob2 = 1 - prob1;
+    let probX = 0;
+
+    if (isDrawAllowed) {
+        probX = 0.26;
+        prob1 *= (1 - probX);
+        prob2 *= (1 - probX);
+    }
+    return { prob1, probX, prob2 };
 }
 
-// Auto generowanie meczu co 3 minuty
-setInterval(generateRandomMatch, 180000);
+function probToOdds(prob, margin = 0.06) {
+    if (!prob || prob <= 0) return null;
+    return parseFloat((1 / (prob * (1 + margin))).toFixed(2));
+}
 
-function resolveMatch(matchId, result) {
-    const match = sportsMatches.find(m => m.id === parseInt(matchId));
-    if (!match || match.status === 'RESOLVED') return;
+function generate5MinMatches() {
+    sportsMatches = [];
+    let idCounter = Date.now();
 
-    match.status = 'RESOLVED';
-    match.result = result; // '1', 'X', lub '2'
+    // Piłka Nożna (3 mecze)
+    const fb = [...SPORTS_DB.football].sort(() => 0.5 - Math.random());
+    for (let i = 0; i < 3; i++) {
+        const t1 = fb[i * 2], t2 = fb[i * 2 + 1];
+        const probs = calcProbabilities(t1.rating, t2.rating, true);
+        
+        sportsMatches.push({
+            id: idCounter++,
+            sport: '⚽ Piłka Nożna',
+            team1: t1.name, team2: t2.name,
+            probs: probs,
+            markets: {
+                '1X2': { '1': probToOdds(probs.prob1), 'X': probToOdds(probs.probX), '2': probToOdds(probs.prob2) },
+                'BTTS': { 'TAK': probToOdds(0.52), 'NIE': probToOdds(0.48) },
+                'GOALS_2.5': { 'OVER': probToOdds(0.49), 'UNDER': probToOdds(0.51) }
+            },
+            status: 'OPEN', result: null
+        });
+    }
 
-    // Rozliczanie kuponów
+    // Koszykówka (1 mecz)
+    const bb = [...SPORTS_DB.basketball].sort(() => 0.5 - Math.random());
+    const bbProbs = calcProbabilities(bb[0].rating, bb[1].rating, false);
+    sportsMatches.push({
+        id: idCounter++,
+        sport: '🏀 Koszykówka',
+        team1: bb[0].name, team2: bb[1].name,
+        probs: bbProbs,
+        markets: {
+            '12': { '1': probToOdds(bbProbs.prob1), '2': probToOdds(bbProbs.prob2) },
+            'HANDI': { 'H1 (-5.5)': probToOdds(bbProbs.prob1 * 0.85), 'H2 (+5.5)': probToOdds(bbProbs.prob2 * 1.15) }
+        },
+        status: 'OPEN', result: null
+    });
+
+    // CS2 (1 mecz)
+    const cs = [...SPORTS_DB.cs2].sort(() => 0.5 - Math.random());
+    const csProbs = calcProbabilities(cs[0].rating, cs[1].rating, false);
+    sportsMatches.push({
+        id: idCounter++,
+        sport: '🎮 CS2',
+        team1: cs[0].name, team2: cs[1].name,
+        probs: csProbs,
+        markets: {
+            '12': { '1': probToOdds(csProbs.prob1), '2': probToOdds(csProbs.prob2) },
+            'MAPS_2.5': { 'OVER': probToOdds(0.35), 'UNDER': probToOdds(0.65) }
+        },
+        status: 'OPEN', result: null
+    });
+
+    // Tenis (1 mecz)
+    const tn = [...SPORTS_DB.tennis].sort(() => 0.5 - Math.random());
+    const tnProbs = calcProbabilities(tn[0].rating, tn[1].rating, false);
+    sportsMatches.push({
+        id: idCounter++,
+        sport: '🎾 Tenis',
+        team1: tn[0].name, team2: tn[1].name,
+        probs: tnProbs,
+        markets: {
+            '12': { '1': probToOdds(tnProbs.prob1), '2': probToOdds(tnProbs.prob2) },
+            'EXACT_SCORE': { 
+                '2:0': probToOdds(tnProbs.prob1 * 0.6), 
+                '2:1': probToOdds(tnProbs.prob1 * 0.4),
+                '0:2': probToOdds(tnProbs.prob2 * 0.6),
+                '1:2': probToOdds(tnProbs.prob2 * 0.4) 
+            }
+        },
+        status: 'OPEN', result: null
+    });
+
+    io.emit('sports-matches-update', { matches: sportsMatches, timer: sportsTimer });
+}
+
+setInterval(() => {
+    sportsTimer--;
+    io.emit('sports-timer-tick', sportsTimer);
+
+    if (sportsTimer <= 0) {
+        resolveAllSportsMatches();
+        sportsTimer = 300;
+        generate5MinMatches();
+    }
+}, 1000);
+
+function resolveAllSportsMatches() {
+    sportsMatches.forEach(m => {
+        m.status = 'RESOLVED';
+        m.winningPicks = [];
+
+        const rand = Math.random();
+        let mainRes = '2';
+        if (rand < m.probs.prob1) mainRes = '1';
+        else if (rand < m.probs.prob1 + m.probs.probX) mainRes = 'X';
+        
+        m.winningPicks.push(mainRes);
+
+        if (Math.random() > 0.45) m.winningPicks.push('TAK'); else m.winningPicks.push('NIE');
+        if (Math.random() > 0.50) m.winningPicks.push('OVER'); else m.winningPicks.push('UNDER');
+        if (mainRes === '1') { m.winningPicks.push('H1 (-5.5)'); m.winningPicks.push('2:0'); m.winningPicks.push('2:1'); } 
+        else { m.winningPicks.push('H2 (+5.5)'); m.winningPicks.push('0:2'); m.winningPicks.push('1:2'); }
+    });
+
     db.coupons.forEach(coupon => {
         if (coupon.status !== 'PENDING') return;
 
-        let allResolved = true;
         let couponWon = true;
 
         for (let sel of coupon.selections) {
             const m = sportsMatches.find(x => x.id === sel.matchId);
-            if (!m || m.status !== 'RESOLVED') {
-                allResolved = false;
-                break;
-            }
-            if (m.result !== sel.pick) {
+            if (!m || !m.winningPicks.includes(sel.pick)) {
                 couponWon = false;
+                break;
             }
         }
 
-        if (allResolved) {
-            coupon.status = couponWon ? 'WON' : 'LOST';
-            if (couponWon) {
-                if (db.players[coupon.nick]) {
-                    db.players[coupon.nick].balance += coupon.potentialWin;
-                    let socket = Array.from(io.sockets.sockets.values()).find(s => s.nick === coupon.nick);
-                    if (socket) {
-                        socket.emit('notification', { type: 'success', msg: `Twój kupon wygrał $${coupon.potentialWin.toLocaleString()}!` });
-                        socket.emit('balance-update', db.players[coupon.nick].balance);
-                    }
-                }
+        coupon.status = couponWon ? 'WON' : 'LOST';
+
+        if (couponWon && db.players[coupon.nick]) {
+            db.players[coupon.nick].balance += coupon.potentialWin;
+            let socket = Array.from(io.sockets.sockets.values()).find(s => s.nick === coupon.nick);
+            if (socket) {
+                socket.emit('notification', { type: 'success', msg: `🎉 Kupon #${coupon.id} wygrał $${coupon.potentialWin.toLocaleString()}!` });
+                socket.emit('balance-update', db.players[coupon.nick].balance);
             }
         }
     });
 
     saveDB();
-    io.emit('sports-matches-update', sportsMatches);
     io.emit('coupons-update');
 }
 
+generate5MinMatches();
+
+// ==========================================
+// --- SOCKETS & HELPERY ---
+// ==========================================
 function getOnlinePlayersData() {
     const online = {};
     for (let [id, socket] of io.sockets.sockets) {
@@ -266,13 +374,6 @@ io.on('connection', (socket) => {
 
         if (!amount || amount <= 0 || player.balance < amount) {
             return socket.emit('notification', { type: 'error', msg: 'Brak wystarczających środków!' });
-        }
-
-        if (data.type === 'color') {
-            let hasColorBet = rouletteState.bets.some(b => b.nick === socket.nick && b.type === 'color');
-            if (hasColorBet) {
-                return socket.emit('notification', { type: 'error', msg: 'Obstawiłeś już kolor w tej rundzie!' });
-            }
         }
 
         player.balance -= amount;
@@ -400,7 +501,7 @@ io.on('connection', (socket) => {
         const coupon = {
             id: 'KUP-' + Math.floor(Math.random() * 899999 + 100000),
             nick: socket.nick,
-            selections: data.selections, // [{ matchId, pick, odds, matchName }]
+            selections: data.selections,
             stake: stake,
             totalOdds: data.totalOdds,
             potentialWin: Math.floor(stake * data.totalOdds),
@@ -430,12 +531,6 @@ io.on('connection', (socket) => {
         if (!socket.isAdmin) return;
         rouletteState.forcedResult = parseInt(num);
         logEvent(`ADMIN ustawił wynik ruletki: ${num}`);
-    });
-
-    socket.on('admin-resolve-match', (data) => {
-        if (!socket.isAdmin) return;
-        resolveMatch(data.matchId, data.result);
-        logEvent(`ADMIN rozstrzygnął mecz #${data.matchId} ze skutkiem: ${data.result}`);
     });
 });
 
