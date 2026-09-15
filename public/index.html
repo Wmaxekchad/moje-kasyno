@@ -1,658 +1,604 @@
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NapletoCasino</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-main: #0a0b0e;
-            --card-bg: rgba(22, 25, 35, 0.9);
-            --gold: #f1c40f;
-            --red: #e74c3c;
-            --black: #2c3e50;
-            --green: #2ecc71;
-            --blue: #3498db;
-        }
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+const fs = require('fs');
 
-        * { box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 
-        body {
-            background-color: var(--bg-main);
-            color: #fff;
-            margin: 0;
-            padding: 0;
-            background-image: radial-gradient(circle at 50% 0%, #171b26 0%, #0a0b0e 80%);
-            min-height: 100vh;
-        }
+const DB_FILE = path.join(__dirname, 'database.json');
+const LOG_FILE = path.join(__dirname, 'casino.log');
+const ADMIN_NICK = 'wmaxek';
+const ADMIN_PASS = 'Olek123#';
 
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+app.use(express.static(path.join(__dirname, 'public')));
 
-        .navbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--card-bg);
-            padding: 15px 30px;
-            border-radius: 16px;
-            border: 1px solid rgba(241, 196, 15, 0.2);
-            backdrop-filter: blur(10px);
-            margin-bottom: 20px;
-        }
+let db = { players: {}, coupons: [] };
 
-        .brand { font-size: 1.6rem; font-weight: 700; color: var(--gold); letter-spacing: 1px; }
-        .user-info { display: flex; gap: 20px; align-items: center; }
-        .balance-badge { background: rgba(46, 204, 113, 0.15); border: 1px solid var(--green); color: var(--green); padding: 8px 18px; border-radius: 20px; font-weight: 600; }
+if (fs.existsSync(DB_FILE)) {
+    try { 
+        db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); 
+        if (!db.coupons) db.coupons = [];
+    } catch (e) { console.error("Błąd bazy:", e); }
+}
 
-        .nav-tabs { display: flex; gap: 15px; margin-bottom: 20px; }
-        .tab-btn {
-            background: var(--card-bg);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #aaa;
-            padding: 12px 25px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: 0.3s;
-        }
-        .tab-btn.active, .tab-btn:hover { background: var(--gold); color: #000; border-color: var(--gold); }
+function saveDB() {
+    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+}
 
-        #notif-area { position: fixed; top: 20px; right: 20px; z-index: 999; }
-        .notif { padding: 12px 20px; border-radius: 8px; margin-bottom: 10px; color: #fff; font-weight: 600; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
-        .notif-success { background: var(--green); }
-        .notif-error { background: var(--red); }
-        .notif-info { background: var(--blue); }
+function logEvent(text) {
+    const entry = `[${new Date().toLocaleString('pl-PL')}] ${text}\n`;
+    fs.appendFileSync(LOG_FILE, entry);
+    io.emit('admin-log', entry);
+}
 
-        .layout-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
-        .game-panel { background: var(--card-bg); border-radius: 16px; padding: 25px; border: 1px solid rgba(255,255,255,0.05); }
+// ==========================================
+// --- RULETKA ENGINE ---
+// ==========================================
+const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+let rouletteState = {
+    timer: 15,
+    status: 'WAITING',
+    forcedResult: null,
+    history: [12, 35, 0, 7, 22, 18, 2, 29],
+    bets: []
+};
 
-        /* RULETKA CSS */
-        .history-container { display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.4); padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.05); }
-        .history-title { font-size: 0.85rem; color: #888; font-weight: 600; text-transform: uppercase; }
-        .history-list { display: flex; gap: 8px; overflow-x: auto; }
-        .history-item { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
+setInterval(() => {
+    if (rouletteState.status === 'WAITING') {
+        rouletteState.timer--;
+        io.emit('timer-tick', rouletteState.timer);
+        if (rouletteState.timer <= 0) spinRoulette();
+    }
+}, 1000);
 
-        .roulette-wrapper { position: relative; height: 90px; background: #050608; border-radius: 12px; overflow: hidden; border: 2px solid var(--gold); margin-bottom: 20px; box-shadow: inset 0 0 20px rgba(0,0,0,0.8); }
-        .roulette-pin { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 4px; height: 100%; background: var(--gold); z-index: 10; box-shadow: 0 0 12px var(--gold); }
-        .roulette-tape { display: flex; position: absolute; top: 10px; height: 70px; will-change: transform; }
-        .r-card { width: 60px; height: 70px; margin: 0 5px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.3rem; flex-shrink: 0; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
-
-        .bg-red { background: var(--red); }
-        .bg-black { background: var(--black); }
-        .bg-green { background: var(--green); }
-
-        .roulette-table { display: grid; grid-template-columns: 60px repeat(12, 1fr); gap: 6px; margin-top: 20px; }
-        .grid-btn { padding: 14px 2px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); transition: 0.2s; user-select: none; }
-        .grid-btn:hover { transform: translateY(-2px); filter: brightness(1.25); }
-        .zero-btn { grid-row: span 3; background: var(--green); display: flex; align-items: center; justify-content: center; }
-
-        .extra-bets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
-        .color-bets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
-
-        /* LIVE PANEL */
-        .side-panel { background: var(--card-bg); border-radius: 16px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; max-height: 700px; }
-        .panel-title { font-size: 1.1rem; font-weight: 700; color: var(--gold); margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
-        .side-list { overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 8px; }
-        .live-bet-item { background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; border-left: 3px solid var(--gold); }
-
-        /* BLACKJACK CSS */
-        .bj-table { text-align: center; }
-        .cards-container { display: flex; justify-content: center; gap: 10px; margin: 20px 0; }
-        .card { width: 75px; height: 105px; background: #fff; color: #000; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; padding: 8px; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        .card.red-card { color: var(--red); }
-
-        /* BUKMACHER CSS */
-        .match-card { background: rgba(0,0,0,0.4); border-radius: 10px; padding: 15px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.05); }
-        .match-header { font-size: 0.8rem; color: var(--gold); font-weight: 600; text-transform: uppercase; margin-bottom: 5px; }
-        .match-teams { font-size: 1.05rem; font-weight: bold; margin-bottom: 12px; }
-        .odds-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .odd-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 8px; border-radius: 6px; text-align: center; cursor: pointer; transition: 0.2s; }
-        .odd-btn:hover, .odd-btn.selected { background: var(--gold); color: #000; font-weight: bold; }
-        .odd-btn span { display: block; font-size: 0.75rem; opacity: 0.8; }
-
-        /* KUPON CSS */
-        .coupon-item { background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; margin-bottom: 8px; font-size: 0.85rem; border-left: 3px solid var(--blue); position: relative; }
-        .coupon-remove { position: absolute; right: 8px; top: 8px; cursor: pointer; color: var(--red); font-weight: bold; }
-
-        .btn { padding: 12px 24px; border-radius: 8px; border: none; font-weight: 700; cursor: pointer; transition: 0.2s; }
-        .btn-gold { background: var(--gold); color: #000; }
-        .btn-gold:hover { background: #d4ac0d; }
-        input[type="number"], input[type="text"] { background: #000; border: 1px solid #333; color: #fff; padding: 12px; border-radius: 8px; font-size: 1rem; }
-
-        .admin-card { background: #191409; border: 1px solid var(--gold); padding: 20px; border-radius: 12px; margin-top: 25px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        td, th { padding: 10px; border: 1px solid #333; text-align: left; }
-
-        .hidden { display: none !important; }
-    </style>
-</head>
-<body>
-
-<div id="notif-area"></div>
-
-<div class="container">
-    <div id="login-screen" class="game-panel" style="max-width:400px; margin: 100px auto; text-align:center;">
-        <h2 style="color:var(--gold)">NapletoCasino</h2>
-        <p style="color:#aaa;">Zaloguj się i odbierz darmowe <strong>$1 000</strong>!</p>
-        <input type="text" id="nick-input" placeholder="Twój Pseudonim..." style="width:100%; margin-bottom:15px;">
-        <button class="btn btn-gold" style="width:100%" onclick="login()">Dołącz do Gry</button>
-    </div>
-
-    <div id="main-screen" class="hidden">
-        <div class="navbar">
-            <div class="brand">🎰 NapletoCasino</div>
-            <div class="user-info">
-                <span>Gracz: <strong id="u-nick"></strong></span>
-                <div class="balance-badge">Saldo: $<span id="u-balance">0</span></div>
-            </div>
-        </div>
-
-        <div class="nav-tabs">
-            <button class="tab-btn active" onclick="switchTab('roulette')">Ruletka Live</button>
-            <button class="tab-btn" onclick="switchTab('blackjack')">Blackjack</button>
-            <button class="tab-btn" onclick="switchTab('sports')">⚽ Bukmacher</button>
-        </div>
-
-        <div class="layout-grid">
-            <div>
-                <!-- RULETKA PANEL -->
-                <div id="tab-roulette" class="game-panel">
-                    <div class="history-container">
-                        <div class="history-title">Ostatnie wyniki:</div>
-                        <div class="history-list" id="r-history"></div>
-                    </div>
-
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="margin:0;">Ruletka</h3>
-                        <div>Losowanie za: <strong id="r-timer" style="color:var(--gold); font-size:1.2rem;">15s</strong></div>
-                    </div>
-
-                    <div class="roulette-wrapper">
-                        <div class="roulette-pin"></div>
-                        <div class="roulette-tape" id="r-tape"></div>
-                    </div>
-
-                    <div style="text-align:center; margin-bottom:20px;">
-                        Stawka: <input type="number" id="r-bet-amount" value="50" min="10" style="width:120px;">
-                        <button class="btn btn-gold" onclick="setBet(100)">$100</button>
-                        <button class="btn btn-gold" onclick="setBet(500)">$500</button>
-                    </div>
-
-                    <div class="roulette-table" id="r-table"></div>
-
-                    <div class="extra-bets">
-                        <div class="grid-btn" style="background:#222;" onclick="placeRBet('doz1', '1-12')">1st 12 (x3)</div>
-                        <div class="grid-btn" style="background:#222;" onclick="placeRBet('doz2', '13-24')">2nd 12 (x3)</div>
-                        <div class="grid-btn" style="background:#222;" onclick="placeRBet('doz3', '25-36')">3rd 12 (x3)</div>
-                    </div>
-
-                    <div class="color-bets">
-                        <div class="grid-btn" style="background:#222;" onclick="placeRBet('half1', '1-18')">1-18 (x2)</div>
-                        <div class="grid-btn bg-red" onclick="placeRBet('color', 'red')">Czerwone (x2)</div>
-                        <div class="grid-btn bg-black" onclick="placeRBet('color', 'black')">Czarne (x2)</div>
-                        <div class="grid-btn" style="background:#222;" onclick="placeRBet('half2', '19-36')">19-36 (x2)</div>
-                    </div>
-                </div>
-
-                <!-- BLACKJACK PANEL -->
-                <div id="tab-blackjack" class="game-panel hidden">
-                    <div class="bj-table">
-                        <h3>Stół do Blackjacka</h3>
-                        
-                        <div id="bj-controls-start">
-                            <input type="number" id="bj-bet-amount" value="100" min="10" style="width:150px;">
-                            <button class="btn btn-gold" onclick="startBlackjack()">Rozdaj Karty</button>
-                        </div>
-
-                        <div id="bj-game-area" class="hidden">
-                            <h4>Krupier (<span id="bj-dealer-score">0</span>)</h4>
-                            <div class="cards-container" id="bj-dealer-cards"></div>
-
-                            <h4>Twój Wynik (<span id="bj-player-score">0</span>)</h4>
-                            <div class="cards-container" id="bj-player-cards"></div>
-
-                            <div style="margin-top:20px;" id="bj-actions">
-                                <button class="btn btn-gold" onclick="bjHit()">Hit (Dobierz)</button>
-                                <button class="btn" style="background:var(--red); color:#fff;" onclick="bjStand()">Stand (Pas)</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- BUKMACHER PANEL -->
-                <div id="tab-sports" class="game-panel hidden">
-                    <h3>Zakłady Sportowe i Esportowe</h3>
-                    <div id="sports-matches-list">
-                        <!-- Mecze wczytywane dynamicznie -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- PANEL BOCZNY (ZAKŁADY RULETKI / KUPON BUKMACHERSKI) -->
-            <div>
-                <!-- LIVE BETS RULETKA -->
-                <div class="side-panel" id="side-roulette-panel">
-                    <div class="panel-title">🎲 Zakłady Ruletki</div>
-                    <div class="side-list" id="live-bets-list"></div>
-                </div>
-
-                <!-- KUPON BUKMACHER -->
-                <div class="side-panel hidden" id="side-sports-panel">
-                    <div class="panel-title">📜 Twój Kupon</div>
-                    <div class="side-list" id="coupon-list">
-                        <p style="color:#aaa; font-size:0.85rem; text-align:center;">Kliknij kurs meczu, aby dodać typ do kuponu.</p>
-                    </div>
-
-                    <div style="margin-top:15px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                            <span>Łączny Kurs:</span>
-                            <strong id="coupon-total-odds" style="color:var(--gold);">1.00</strong>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                            <span>Stawka:</span>
-                            <input type="number" id="coupon-stake" value="100" min="10" style="width:100px; padding:6px;" oninput="updateCouponCalc()">
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
-                            <span>Ewentualna Wygrana:</span>
-                            <strong id="coupon-win" style="color:var(--green); font-size:1.1rem;">$0</strong>
-                        </div>
-                        <button class="btn btn-gold" style="width:100%" onclick="placeSportsCoupon()">Postaw Kupon</button>
-                    </div>
-
-                    <div class="panel-title" style="margin-top:20px;">📂 Moje Kupony</div>
-                    <div class="side-list" id="my-coupons-list"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- PANEL ADMINA -->
-        <div id="admin-panel" class="admin-card hidden">
-            <h3 style="color:var(--gold); margin-top:0;">⚡ Panel Administratora</h3>
-            <div style="display:flex; gap:20px; flex-wrap:wrap;">
-                <div>
-                    <label>Wymuś wynik ruletki (0-36):</label><br>
-                    <input type="number" id="admin-num" min="0" max="36" style="width:100px;">
-                    <button class="btn btn-gold" onclick="forceAdminNum()">Ustaw</button>
-                </div>
-            </div>
-
-            <h4>Rozstrzyganie Meczów Bukmacherskich:</h4>
-            <div id="admin-sports-list"></div>
-
-            <h4>Gracze Online:</h4>
-            <table>
-                <thead>
-                    <tr><th>Nick</th><th>Saldo</th><th>IP</th><th>Akcje</th></tr>
-                </thead>
-                <tbody id="admin-players-list"></tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<script src="/socket.io/socket.io.js"></script>
-<script>
-    const socket = io();
-    const REDS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
-    let myNick = '', myBalance = 0;
-    const rouletteOrder = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
-
-    let currentMatches = [];
-    let myCouponSelections = [];
-    let myCoupons = [];
-
-    function notify(msg, type = 'info') {
-        const area = document.getElementById('notif-area');
-        const el = document.createElement('div');
-        el.className = `notif notif-${type}`;
-        el.innerText = msg;
-        area.appendChild(el);
-        setTimeout(() => el.remove(), 4000);
+function spinRoulette() {
+    rouletteState.status = 'SPINNING';
+    
+    let winningNumber;
+    if (rouletteState.forcedResult !== null) {
+        winningNumber = rouletteState.forcedResult;
+        rouletteState.forcedResult = null;
+    } else {
+        winningNumber = Math.floor(Math.random() * 37);
     }
 
-    function login() {
-        const nick = document.getElementById('nick-input').value;
-        if (nick) socket.emit('set-nickname', nick);
-    }
+    let winningColor = winningNumber === 0 ? 'green' : (RED_NUMBERS.includes(winningNumber) ? 'red' : 'black');
+    logEvent(`Ruletka: Wygrana cyfra ${winningNumber} (${winningColor.toUpperCase()})`);
 
-    socket.on('init-player', (data) => {
-        myNick = data.nick;
-        myBalance = data.balance;
-        currentMatches = data.sportsMatches || [];
-        myCoupons = data.coupons || [];
+    io.emit('roulette-spin', { winningNumber, winningColor });
 
-        document.getElementById('login-screen').classList.add('hidden');
-        document.getElementById('main-screen').classList.remove('hidden');
-        document.getElementById('u-nick').innerText = myNick;
-        document.getElementById('u-balance').innerText = myBalance.toLocaleString();
+    setTimeout(() => {
+        rouletteState.bets.forEach(bet => {
+            let socket = Array.from(io.sockets.sockets.values()).find(s => s.nick === bet.nick);
+            if (!socket || !db.players[bet.nick]) return;
 
-        if (data.isAdmin) document.getElementById('admin-panel').classList.remove('hidden');
+            let won = false;
+            let multiplier = 0;
 
-        buildRouletteTable();
-        buildRouletteTape();
-        renderHistory(data.history);
+            if (bet.type === 'number' && parseInt(bet.value) === winningNumber) { won = true; multiplier = 36; }
+            else if (bet.type === 'color' && bet.value === winningColor) { won = true; multiplier = 2; }
+            else if (bet.type === 'even' && winningNumber !== 0 && winningNumber % 2 === 0) { won = true; multiplier = 2; }
+            else if (bet.type === 'odd' && winningNumber % 2 !== 0) { won = true; multiplier = 2; }
+            else if (bet.type === 'doz1' && winningNumber >= 1 && winningNumber <= 12) { won = true; multiplier = 3; }
+            else if (bet.type === 'doz2' && winningNumber >= 13 && winningNumber <= 24) { won = true; multiplier = 3; }
+            else if (bet.type === 'doz3' && winningNumber >= 25 && winningNumber <= 36) { won = true; multiplier = 3; }
+            else if (bet.type === 'half1' && winningNumber >= 1 && winningNumber <= 18) { won = true; multiplier = 2; }
+            else if (bet.type === 'half2' && winningNumber >= 19 && winningNumber <= 36) { won = true; multiplier = 2; }
 
-        if (data.currentBets) data.currentBets.forEach(renderLiveBet);
-        renderSportsMatches();
-        renderMyCoupons();
-    });
-
-    socket.on('balance-update', (bal) => {
-        myBalance = bal;
-        document.getElementById('u-balance').innerText = myBalance.toLocaleString();
-    });
-
-    socket.on('notification', d => notify(d.msg, d.type));
-
-    function switchTab(tab) {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('tab-roulette').classList.add('hidden');
-        document.getElementById('tab-blackjack').classList.add('hidden');
-        document.getElementById('tab-sports').classList.add('hidden');
-
-        document.getElementById('side-roulette-panel').classList.add('hidden');
-        document.getElementById('side-sports-panel').classList.add('hidden');
-
-        if (tab === 'roulette') {
-            document.getElementById('tab-roulette').classList.remove('hidden');
-            document.getElementById('side-roulette-panel').classList.remove('hidden');
-        } else if (tab === 'blackjack') {
-            document.getElementById('tab-blackjack').classList.remove('hidden');
-            document.getElementById('side-roulette-panel').classList.remove('hidden');
-        } else if (tab === 'sports') {
-            document.getElementById('tab-sports').classList.remove('hidden');
-            document.getElementById('side-sports-panel').classList.remove('hidden');
-        }
-        event.target.classList.add('active');
-    }
-
-    /* RULETKA */
-    function renderHistory(history) {
-        const hList = document.getElementById('r-history');
-        hList.innerHTML = '';
-        history.forEach(num => {
-            const item = document.createElement('div');
-            let bg = num === 0 ? 'bg-green' : (REDS.includes(num) ? 'bg-red' : 'bg-black');
-            item.className = `history-item ${bg}`;
-            item.innerText = num;
-            hList.appendChild(item);
+            if (won) {
+                let winAmount = bet.amount * multiplier;
+                db.players[bet.nick].balance += winAmount;
+                socket.emit('notification', { type: 'success', msg: `Wygrałeś $${winAmount.toLocaleString()} w ruletce!` });
+                socket.emit('balance-update', db.players[bet.nick].balance);
+            }
         });
-    }
 
-    function buildRouletteTable() {
-        const table = document.getElementById('r-table');
-        table.innerHTML = '<div class="grid-btn zero-btn" onclick="placeRBet(\'number\', 0)">0</div>';
-        for (let i = 1; i <= 36; i++) {
-            const isRed = REDS.includes(i);
-            const btn = document.createElement('div');
-            btn.className = `grid-btn ${isRed ? 'bg-red' : 'bg-black'}`;
-            btn.innerText = i;
-            btn.onclick = () => placeRBet('number', i);
-            table.appendChild(btn);
-        }
-    }
+        saveDB();
+        rouletteState.history.unshift(winningNumber);
+        if (rouletteState.history.length > 10) rouletteState.history.pop();
 
-    function buildRouletteTape() {
-        const tape = document.getElementById('r-tape');
-        tape.innerHTML = '';
-        for (let r = 0; r < 6; r++) {
-            rouletteOrder.forEach(n => {
-                const card = document.createElement('div');
-                let bg = n === 0 ? 'bg-green' : (REDS.includes(n) ? 'bg-red' : 'bg-black');
-                card.className = `r-card ${bg}`;
-                card.innerText = n;
-                tape.appendChild(card);
-            });
-        }
-    }
+        rouletteState.bets = [];
+        rouletteState.timer = 15;
+        rouletteState.status = 'WAITING';
 
-    function setBet(v) { document.getElementById('r-bet-amount').value = v; }
-    function placeRBet(type, value) {
-        const amount = parseInt(document.getElementById('r-bet-amount').value);
-        socket.emit('place-roulette-bet', { type, value, amount });
-    }
-
-    socket.on('timer-tick', t => document.getElementById('r-timer').innerText = t + 's');
-    socket.on('roulette-spin', (data) => {
-        const tape = document.getElementById('r-tape');
-        const cardWidth = 70;
-        const targetSetIndex = 3 * rouletteOrder.length + rouletteOrder.indexOf(data.winningNumber);
-        const wrapperWidth = document.querySelector('.roulette-wrapper').offsetWidth;
-        const centerOffset = (wrapperWidth / 2) - (cardWidth / 2);
-        const finalTransform = (targetSetIndex * cardWidth) - centerOffset;
-
-        tape.style.transition = 'transform 5s cubic-bezier(0.15, 0.9, 0.2, 1)';
-        tape.style.transform = `translateX(-${finalTransform}px)`;
-    });
-
-    socket.on('roulette-reset', (data) => {
-        const tape = document.getElementById('r-tape');
-        tape.style.transition = 'none';
-        tape.style.transform = 'translateX(0px)';
-        document.getElementById('live-bets-list').innerHTML = '';
-        if (data.history) renderHistory(data.history);
-    });
-
-    socket.on('new-live-bet', renderLiveBet);
-    function renderLiveBet(bet) {
-        const list = document.getElementById('live-bets-list');
-        const item = document.createElement('div');
-        item.className = 'live-bet-item';
-        item.innerHTML = `<div><strong>${bet.nick}</strong><br><small style="color:#aaa;">${bet.type}: ${bet.value}</small></div><div style="color:var(--gold); font-weight:bold;">$${bet.amount.toLocaleString()}</div>`;
-        list.prepend(item);
-    }
-
-    /* BLACKJACK */
-    function startBlackjack() { socket.emit('bj-start', document.getElementById('bj-bet-amount').value); }
-    function bjHit() { socket.emit('bj-hit'); }
-    function bjStand() { socket.emit('bj-stand'); }
-
-    socket.on('bj-state', (data) => {
-        document.getElementById('bj-controls-start').classList.add('hidden');
-        document.getElementById('bj-game-area').classList.remove('hidden');
-
-        renderCards('bj-player-cards', data.playerHand);
-        renderCards('bj-dealer-cards', data.dealerHand);
-
-        document.getElementById('bj-player-score').innerText = data.playerScore;
-        document.getElementById('bj-dealer-score').innerText = data.dealerScore;
-
-        if (data.status !== 'PLAYING') {
-            document.getElementById('bj-actions').classList.add('hidden');
-            setTimeout(() => {
-                if (data.status === 'WIN') notify(`Wygrałeś $${data.payout}!`, 'success');
-                else if (data.status === 'BUST') notify('Za dużo! Przegrana.', 'error');
-                else if (data.status === 'LOSE') notify('Krupier wygrał.', 'error');
-                else notify('Remis! Zwrot środków.', 'info');
-
-                document.getElementById('bj-controls-start').classList.remove('hidden');
-                document.getElementById('bj-actions').classList.remove('hidden');
-                document.getElementById('bj-game-area').classList.add('hidden');
-            }, 2000);
-        }
-    });
-
-    function renderCards(containerId, hand) {
-        const container = document.getElementById(containerId);
-        container.innerHTML = '';
-        hand.forEach(c => {
-            const card = document.createElement('div');
-            const isRed = ['♥', '♦'].includes(c.suit);
-            card.className = `card ${isRed ? 'red-card' : ''}`;
-            card.innerHTML = `<div>${c.value}</div><div style="text-align:center">${c.suit}</div><div style="text-align:right">${c.value}</div>`;
-            container.appendChild(card);
+        io.emit('roulette-reset', {
+            history: rouletteState.history,
+            players: getOnlinePlayersData()
         });
-    }
+    }, 6000);
+}
 
-    /* BUKMACHER */
-    socket.on('sports-matches-update', (matches) => {
-        currentMatches = matches;
-        renderSportsMatches();
-        renderAdminSports();
+// ==========================================
+// --- BLACKJACK ENGINE ---
+// ==========================================
+const blackjackGames = {};
+
+function createDeck() {
+    const suits = ['♠', '♥', '♦', '♣'];
+    const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+    let deck = [];
+    for (let s of suits) {
+        for (let v of values) deck.push({ suit: s, value: v });
+    }
+    return deck.sort(() => Math.random() - 0.5);
+}
+
+function calculateHand(hand) {
+    let score = 0, aces = 0;
+    for (let card of hand) {
+        if (['J', 'Q', 'K'].includes(card.value)) score += 10;
+        else if (card.value === 'A') { score += 11; aces++; }
+        else score += parseInt(card.value);
+    }
+    while (score > 21 && aces > 0) { score -= 10; aces--; }
+    return score;
+}
+
+// ==========================================
+// --- BARDZO DUŻA BAZA DRUŻYN (PONAD 100 POZYCJI) ---
+// ==========================================
+const SPORTS_DB = {
+    football: [
+        { name: "Real Madryt", rating: 93 }, { name: "FC Barcelona", rating: 90 },
+        { name: "Manchester City", rating: 94 }, { name: "Bayern Monachium", rating: 89 },
+        { name: "Arsenal Londyn", rating: 88 }, { name: "PSG", rating: 87 },
+        { name: "Inter Mediolan", rating: 86 }, { name: "BVB Dortmund", rating: 84 },
+        { name: "Liverpool FC", rating: 91 }, { name: "Chelsea Londyn", rating: 83 },
+        { name: "Juventus", rating: 84 }, { name: "AC Milan", rating: 83 },
+        { name: "Atletico Madryt", rating: 86 }, { name: "Bayer Leverkusen", rating: 88 },
+        { name: "Tottenham Hotspur", rating: 82 }, { name: "Manchester United", rating: 82 },
+        { name: "SSC Napoli", rating: 84 }, { name: "AS Roma", rating: 81 },
+        { name: "SL Benfica", rating: 81 }, { name: "FC Porto", rating: 80 },
+        { name: "Sporting CP", rating: 82 }, { name: "Ajax Amsterdam", rating: 78 },
+        { name: "Legia Warszawa", rating: 73 }, { name: "Lech Poznań", rating: 72 },
+        { name: "Raków Częstochowa", rating: 71 }, { name: "Jagiellonia Białystok", rating: 72 },
+        { name: "Aston Villa", rating: 83 }, { name: "Newcastle United", rating: 82 },
+        { name: "RB Lipsk", rating: 83 }, { name: "Villarreal CF", rating: 80 },
+        { name: "Real Betis", rating: 79 }, { name: "Fiorentina", rating: 78 }
+    ],
+    basketball: [
+        { name: "Boston Celtics", rating: 93 }, { name: "Denver Nuggets", rating: 90 },
+        { name: "LA Lakers", rating: 86 }, { name: "Golden State Warriors", rating: 85 },
+        { name: "Milwaukee Bucks", rating: 89 }, { name: "Dallas Mavericks", rating: 88 },
+        { name: "Philadelphia 76ers", rating: 86 }, { name: "Phoenix Suns", rating: 85 },
+        { name: "Minnesota Timberwolves", rating: 88 }, { name: "Oklahoma City Thunder", rating: 89 },
+        { name: "Miami Heat", rating: 83 }, { name: "New York Knicks", rating: 86 },
+        { name: "Real Madryt Baloncesto", rating: 80 }, { name: "FC Barcelona Bàsquet", rating: 79 },
+        { name: "Panathinaikos ATENY", rating: 80 }, { name: "Olympiacos", rating: 79 },
+        { name: "Monaco Basket", rating: 78 }, { name: "Fenerbahçe Basket", rating: 78 },
+        { name: "Cleveland Cavaliers", rating: 84 }, { name: "Indiana Pacers", rating: 83 },
+        { name: "Sacramento Kings", rating: 82 }, { name: "LA Clippers", rating: 84 },
+        { name: "Orlando Magic", rating: 82 }, { name: "Memphis Grizzlies", rating: 81 }
+    ],
+    cs2: [
+        { name: "FaZe Clan", rating: 91 }, { name: "Natus Vincere", rating: 93 },
+        { name: "G2 Esports", rating: 90 }, { name: "Team Vitality", rating: 92 },
+        { name: "MOUZ", rating: 89 }, { name: "Team Spirit", rating: 91 },
+        { name: "Astralis", rating: 84 }, { name: "Virtus.pro", rating: 85 },
+        { name: "Heroic", rating: 83 }, { name: "Team Liquid", rating: 84 },
+        { name: "BIG Clan", rating: 80 }, { name: "FURIA Esports", rating: 83 },
+        { name: "Eternal Fire", rating: 85 }, { name: "COMPLEXITY", rating: 82 },
+        { name: "9INE", rating: 75 }, { name: "ENCE", rating: 79 },
+        { name: "Fnatic", rating: 80 }, { name: "NIP", rating: 78 },
+        { name: "Monte", rating: 79 }, { name: "FlyQuest", rating: 78 },
+        { name: "SAW Esports", rating: 81 }, { name: "Imperial Esports", rating: 77 },
+        { name: "3DMAX", rating: 78 }, { name: "BetBoom Team", rating: 79 }
+    ],
+    tennis: [
+        { name: "Iga Świątek", rating: 96 }, { name: "Aryna Sabalenka", rating: 94 },
+        { name: "Jannik Sinner", rating: 96 }, { name: "Carlos Alcaraz", rating: 95 },
+        { name: "Novak Djokovic", rating: 93 }, { name: "Daniil Medvedev", rating: 90 },
+        { name: "Alexander Zverev", rating: 91 }, { name: "Andrey Rublev", rating: 87 },
+        { name: "Stefanos Tsitsipas", rating: 86 }, { name: "Casper Ruud", rating: 87 },
+        { name: "Coco Gauff", rating: 91 }, { name: "Elena Rybakina", rating: 90 },
+        { name: "Hubert Hurkacz", rating: 86 }, { name: "Grigor Dimitrov", rating: 85 },
+        { name: "Taylor Fritz", rating: 86 }, { name: "Alex de Minaur", rating: 86 },
+        { name: "Tommy Paul", rating: 84 }, { name: "Ben Shelton", rating: 84 },
+        { name: "Jessica Pegula", rating: 88 }, { name: "Marketa Vondrousova", rating: 85 },
+        { name: "Zheng Qinwen", rating: 87 }, { name: "Maria Sakkari", rating: 84 },
+        { name: "Ons Jabeur", rating: 84 }, { name: "Daria Kasatkina", rating: 83 }
+    ]
+};
+
+let sportsTimer = 300;
+let sportsMatches = [];
+
+function calcProbabilities(r1, r2, isDrawAllowed = true) {
+    const diff = r1 - r2;
+    let prob1 = 1 / (1 + Math.pow(10, -diff / 400));
+    let prob2 = 1 - prob1;
+    let probX = 0;
+
+    if (isDrawAllowed) {
+        probX = 0.26;
+        prob1 *= (1 - probX);
+        prob2 *= (1 - probX);
+    }
+    return { prob1, probX, prob2 };
+}
+
+function probToOdds(prob, margin = 0.06) {
+    if (!prob || prob <= 0) return null;
+    return parseFloat((1 / (prob * (1 + margin))).toFixed(2));
+}
+
+function generate5MinMatches() {
+    sportsMatches = [];
+    let idCounter = Date.now();
+
+    // Helper do losowania N niepowtarzających się par
+    const getRandomPairs = (categoryArray, count) => {
+        const shuffled = [...categoryArray].sort(() => 0.5 - Math.random());
+        const pairs = [];
+        for (let i = 0; i < count && i * 2 + 1 < shuffled.length; i++) {
+            pairs.push([shuffled[i * 2], shuffled[i * 2 + 1]]);
+        }
+        return pairs;
+    };
+
+    // 1. Piłka Nożna (5 meczów)
+    getRandomPairs(SPORTS_DB.football, 5).forEach(([t1, t2]) => {
+        const probs = calcProbabilities(t1.rating, t2.rating, true);
+        sportsMatches.push({
+            id: idCounter++,
+            sport: '⚽ Piłka Nożna',
+            team1: t1.name, team2: t2.name,
+            probs: probs,
+            markets: {
+                '1X2': { '1': probToOdds(probs.prob1), 'X': probToOdds(probs.probX), '2': probToOdds(probs.prob2) },
+                'BTTS': { 'TAK': probToOdds(0.52), 'NIE': probToOdds(0.48) },
+                'GOALS_2.5': { 'OVER': probToOdds(0.49), 'UNDER': probToOdds(0.51) }
+            },
+            status: 'OPEN', result: null
+        });
     });
 
-    function renderSportsMatches() {
-        const list = document.getElementById('sports-matches-list');
-        list.innerHTML = '';
-
-        currentMatches.filter(m => m.status === 'OPEN').forEach(m => {
-            const el = document.createElement('div');
-            el.className = 'match-card';
-            el.innerHTML = `
-                <div class="match-header">${m.sport}</div>
-                <div class="match-teams">${m.team1} vs ${m.team2}</div>
-                <div class="odds-row">
-                    <div class="odd-btn" onclick="addToCoupon(${m.id}, '1', ${m.odds['1']}, '${m.team1} vs ${m.team2}')">
-                        <span>1 (${m.team1})</span> <strong>${m.odds['1']}</strong>
-                    </div>
-                    ${m.odds['X'] ? `
-                    <div class="odd-btn" onclick="addToCoupon(${m.id}, 'X', ${m.odds['X']}, '${m.team1} vs ${m.team2}')">
-                        <span>X (Remis)</span> <strong>${m.odds['X']}</strong>
-                    </div>` : ''}
-                    <div class="odd-btn" onclick="addToCoupon(${m.id}, '2', ${m.odds['2']}, '${m.team1} vs ${m.team2}')">
-                        <span>2 (${m.team2})</span> <strong>${m.odds['2']}</strong>
-                    </div>
-                </div>
-            `;
-            list.appendChild(el);
+    // 2. Koszykówka (3 mecze)
+    getRandomPairs(SPORTS_DB.basketball, 3).forEach(([t1, t2]) => {
+        const probs = calcProbabilities(t1.rating, t2.rating, false);
+        sportsMatches.push({
+            id: idCounter++,
+            sport: '🏀 Koszykówka',
+            team1: t1.name, team2: t2.name,
+            probs: probs,
+            markets: {
+                '12': { '1': probToOdds(probs.prob1), '2': probToOdds(probs.prob2) },
+                'HANDI': { 'H1 (-5.5)': probToOdds(probs.prob1 * 0.85), 'H2 (+5.5)': probToOdds(probs.prob2 * 1.15) }
+            },
+            status: 'OPEN', result: null
         });
-    }
+    });
 
-    function addToCoupon(matchId, pick, odds, matchName) {
-        myCouponSelections = myCouponSelections.filter(s => s.matchId !== matchId);
-        myCouponSelections.push({ matchId, pick, odds: parseFloat(odds), matchName });
-        renderCoupon();
-    }
+    // 3. CS2 (3 mecze)
+    getRandomPairs(SPORTS_DB.cs2, 3).forEach(([t1, t2]) => {
+        const probs = calcProbabilities(t1.rating, t2.rating, false);
+        sportsMatches.push({
+            id: idCounter++,
+            sport: '🎮 CS2',
+            team1: t1.name, team2: t2.name,
+            probs: probs,
+            markets: {
+                '12': { '1': probToOdds(probs.prob1), '2': probToOdds(probs.prob2) },
+                'MAPS_2.5': { 'OVER': probToOdds(0.35), 'UNDER': probToOdds(0.65) }
+            },
+            status: 'OPEN', result: null
+        });
+    });
 
-    function removeFromCoupon(matchId) {
-        myCouponSelections = myCouponSelections.filter(s => s.matchId !== matchId);
-        renderCoupon();
-    }
+    // 4. Tenis (3 mecze)
+    getRandomPairs(SPORTS_DB.tennis, 3).forEach(([t1, t2]) => {
+        const probs = calcProbabilities(t1.rating, t2.rating, false);
+        sportsMatches.push({
+            id: idCounter++,
+            sport: '🎾 Tenis',
+            team1: t1.name, team2: t2.name,
+            probs: probs,
+            markets: {
+                '12': { '1': probToOdds(probs.prob1), '2': probToOdds(probs.prob2) },
+                'EXACT_SCORE': { 
+                    '2:0': probToOdds(probs.prob1 * 0.6), 
+                    '2:1': probToOdds(probs.prob1 * 0.4),
+                    '0:2': probToOdds(probs.prob2 * 0.6),
+                    '1:2': probToOdds(probs.prob2 * 0.4) 
+                }
+            },
+            status: 'OPEN', result: null
+        });
+    });
 
-    function renderCoupon() {
-        const list = document.getElementById('coupon-list');
-        if (myCouponSelections.length === 0) {
-            list.innerHTML = '<p style="color:#aaa; font-size:0.85rem; text-align:center;">Kliknij kurs meczu, aby dodać typ do kuponu.</p>';
+    io.emit('sports-matches-update', { matches: sportsMatches, timer: sportsTimer });
+}
+
+setInterval(() => {
+    sportsTimer--;
+    io.emit('sports-timer-tick', sportsTimer);
+
+    if (sportsTimer <= 0) {
+        resolveAllSportsMatches();
+        sportsTimer = 300;
+        generate5MinMatches();
+    }
+}, 1000);
+
+function resolveAllSportsMatches() {
+    sportsMatches.forEach(m => {
+        m.status = 'RESOLVED';
+        m.winningPicks = [];
+
+        const rand = Math.random();
+        let mainRes = '2';
+        if (rand < m.probs.prob1) mainRes = '1';
+        else if (rand < m.probs.prob1 + m.probs.probX) mainRes = 'X';
+        
+        m.winningPicks.push(mainRes);
+
+        if (Math.random() > 0.45) m.winningPicks.push('TAK'); else m.winningPicks.push('NIE');
+        if (Math.random() > 0.50) m.winningPicks.push('OVER'); else m.winningPicks.push('UNDER');
+        if (mainRes === '1') { m.winningPicks.push('H1 (-5.5)'); m.winningPicks.push('2:0'); m.winningPicks.push('2:1'); } 
+        else { m.winningPicks.push('H2 (+5.5)'); m.winningPicks.push('0:2'); m.winningPicks.push('1:2'); }
+    });
+
+    db.coupons.forEach(coupon => {
+        if (coupon.status !== 'PENDING') return;
+
+        let couponWon = true;
+
+        for (let sel of coupon.selections) {
+            const m = sportsMatches.find(x => x.id === sel.matchId);
+            if (!m || !m.winningPicks.includes(sel.pick)) {
+                couponWon = false;
+                break;
+            }
+        }
+
+        coupon.status = couponWon ? 'WON' : 'LOST';
+
+        if (couponWon && db.players[coupon.nick]) {
+            db.players[coupon.nick].balance += coupon.potentialWin;
+            let socket = Array.from(io.sockets.sockets.values()).find(s => s.nick === coupon.nick);
+            if (socket) {
+                socket.emit('notification', { type: 'success', msg: `🎉 Kupon #${coupon.id} wygrał $${coupon.potentialWin.toLocaleString()}!` });
+                socket.emit('balance-update', db.players[coupon.nick].balance);
+            }
+        }
+    });
+
+    saveDB();
+    io.emit('coupons-update');
+}
+
+generate5MinMatches();
+
+// ==========================================
+// --- SOCKETS & HELPERY ---
+// ==========================================
+function getOnlinePlayersData() {
+    const online = {};
+    for (let [id, socket] of io.sockets.sockets) {
+        if (socket.nick && db.players[socket.nick]) {
+            online[id] = {
+                nick: socket.nick,
+                balance: db.players[socket.nick].balance,
+                ip: socket.handshake.address.replace('::ffff:', ''),
+                isAdmin: socket.isAdmin
+            };
+        }
+    }
+    return online;
+}
+
+io.on('connection', (socket) => {
+    socket.isAdmin = false;
+
+    socket.on('set-nickname', (nick) => {
+        const cleanNick = nick.trim() || 'Gracz_' + Math.floor(Math.random() * 1000);
+        socket.nick = cleanNick;
+
+        if (!db.players[cleanNick]) {
+            db.players[cleanNick] = { balance: 1000, createdAt: new Date() };
+            saveDB();
+            logEvent(`Nowy gracz: ${cleanNick} (Otrzymał $1 000)`);
+        }
+
+        const isWmaxek = (cleanNick.toLowerCase() === ADMIN_NICK.toLowerCase());
+
+        socket.emit('init-player', {
+            nick: cleanNick,
+            balance: db.players[cleanNick].balance,
+            isWmaxekAccount: isWmaxek,
+            history: rouletteState.history,
+            timer: rouletteState.timer,
+            currentBets: rouletteState.bets,
+            sportsMatches: sportsMatches,
+            coupons: db.coupons.filter(c => c.nick === cleanNick)
+        });
+
+        io.emit('admin-players-update', getOnlinePlayersData());
+    });
+
+    // AUTORYZACJA HASŁA DLA NICKU WMAXEK
+    socket.on('admin-login-auth', (password) => {
+        if (socket.nick && socket.nick.toLowerCase() === ADMIN_NICK.toLowerCase() && password === ADMIN_PASS) {
+            socket.isAdmin = true;
+            socket.emit('admin-auth-success');
+            socket.emit('admin-players-update', getOnlinePlayersData());
+            logEvent(`Administrator ${socket.nick} zalogował się pomyślnie do panelu admina.`);
         } else {
-            list.innerHTML = '';
-            myCouponSelections.forEach(s => {
-                const item = document.createElement('div');
-                item.className = 'coupon-item';
-                item.innerHTML = `
-                    <span class="coupon-remove" onclick="removeFromCoupon(${s.matchId})">✕</span>
-                    <strong>${s.matchName}</strong><br>
-                    Typ: <span style="color:var(--gold); font-weight:bold;">${s.pick}</span> @ <strong>${s.odds}</strong>
-                `;
-                list.appendChild(item);
+            socket.emit('notification', { type: 'error', msg: 'Niepoprawne hasło administratora!' });
+        }
+    });
+
+    // RULETKA HANDLERS
+    socket.on('place-roulette-bet', (data) => {
+        if (!socket.nick || rouletteState.status !== 'WAITING' || rouletteState.timer <= 2) return;
+        
+        const player = db.players[socket.nick];
+        const amount = parseInt(data.amount);
+
+        if (!amount || amount <= 0 || player.balance < amount) {
+            return socket.emit('notification', { type: 'error', msg: 'Brak wystarczających środków!' });
+        }
+
+        player.balance -= amount;
+        saveDB();
+
+        const newBet = { nick: socket.nick, type: data.type, value: data.value, amount: amount };
+        rouletteState.bets.push(newBet);
+
+        socket.emit('balance-update', player.balance);
+        io.emit('new-live-bet', newBet);
+        io.emit('admin-players-update', getOnlinePlayersData());
+    });
+
+    // BLACKJACK HANDLERS
+    socket.on('bj-start', (betAmount) => {
+        const player = db.players[socket.nick];
+        betAmount = parseInt(betAmount);
+
+        if (!betAmount || betAmount <= 0 || player.balance < betAmount) {
+            return socket.emit('notification', { type: 'error', msg: 'Brak środków na ten zakład!' });
+        }
+
+        player.balance -= betAmount;
+        saveDB();
+
+        const deck = createDeck();
+        const playerHand = [deck.pop(), deck.pop()];
+        const dealerHand = [deck.pop(), deck.pop()];
+
+        blackjackGames[socket.id] = { deck, playerHand, dealerHand, bet: betAmount, status: 'PLAYING' };
+
+        socket.emit('balance-update', player.balance);
+        socket.emit('bj-state', {
+            playerHand,
+            dealerHand: [dealerHand[0], { suit: '?', value: '?' }],
+            playerScore: calculateHand(playerHand),
+            dealerScore: '?',
+            status: 'PLAYING',
+            bet: betAmount
+        });
+    });
+
+    socket.on('bj-hit', () => {
+        const game = blackjackGames[socket.id];
+        if (!game || game.status !== 'PLAYING') return;
+
+        game.playerHand.push(game.deck.pop());
+        const pScore = calculateHand(game.playerHand);
+
+        if (pScore > 21) {
+            game.status = 'LOST';
+            socket.emit('bj-state', {
+                playerHand: game.playerHand,
+                dealerHand: game.dealerHand,
+                playerScore: pScore,
+                dealerScore: calculateHand(game.dealerHand),
+                status: 'BUST',
+                bet: game.bet
+            });
+            delete blackjackGames[socket.id];
+        } else {
+            socket.emit('bj-state', {
+                playerHand: game.playerHand,
+                dealerHand: [game.dealerHand[0], { suit: '?', value: '?' }],
+                playerScore: pScore,
+                dealerScore: '?',
+                status: 'PLAYING',
+                bet: game.bet
             });
         }
-        updateCouponCalc();
-    }
-
-    function updateCouponCalc() {
-        let totalOdds = 1.0;
-        myCouponSelections.forEach(s => totalOdds *= s.odds);
-        if (myCouponSelections.length === 0) totalOdds = 1.0;
-
-        const stake = parseInt(document.getElementById('coupon-stake').value) || 0;
-        const win = Math.floor(stake * totalOdds);
-
-        document.getElementById('coupon-total-odds').innerText = totalOdds.toFixed(2);
-        document.getElementById('coupon-win').innerText = '$' + win.toLocaleString();
-    }
-
-    function placeSportsCoupon() {
-        if (myCouponSelections.length === 0) return notify('Twój kupon jest pusty!', 'error');
-        const stake = parseInt(document.getElementById('coupon-stake').value);
-        let totalOdds = 1.0;
-        myCouponSelections.forEach(s => totalOdds *= s.odds);
-
-        socket.emit('place-sports-coupon', {
-            selections: myCouponSelections,
-            stake: stake,
-            totalOdds: parseFloat(totalOdds.toFixed(2))
-        });
-    }
-
-    socket.on('coupon-placed-success', (coupon) => {
-        myCoupons.unshift(coupon);
-        myCouponSelections = [];
-        renderCoupon();
-        renderMyCoupons();
     });
 
-    function renderMyCoupons() {
-        const list = document.getElementById('my-coupons-list');
-        list.innerHTML = '';
-        myCoupons.forEach(c => {
-            const item = document.createElement('div');
-            let statusColor = c.status === 'WON' ? 'var(--green)' : (c.status === 'LOST' ? 'var(--red)' : 'var(--gold)');
-            let statusText = c.status === 'WON' ? 'WYGRANA' : (c.status === 'LOST' ? 'PRZEGRANA' : 'W TRAKCIE');
+    socket.on('bj-stand', () => {
+        const game = blackjackGames[socket.id];
+        if (!game || game.status !== 'PLAYING') return;
 
-            item.className = 'coupon-item';
-            item.style.borderLeftColor = statusColor;
-            item.innerHTML = `
-                <div style="display:flex; justify-content:space-between;">
-                    <small style="color:#aaa;">${c.id}</small>
-                    <strong style="color:${statusColor}">${statusText}</strong>
-                </div>
-                <div>Stawka: $${c.stake} | Kurs: ${c.totalOdds}</div>
-                <div style="color:var(--green); font-weight:bold;">Wygrana: $${c.potentialWin.toLocaleString()}</div>
-            `;
-            list.appendChild(item);
-        });
-    }
-
-    /* ADMIN */
-    socket.on('admin-players-update', (players) => {
-        const body = document.getElementById('admin-players-list');
-        if (!body) return;
-        body.innerHTML = '';
-        for (let id in players) {
-            let p = players[id];
-            body.innerHTML += `<tr>
-                <td>${p.nick}</td>
-                <td>$${p.balance}</td>
-                <td>${p.ip}</td>
-                <td><button onclick="setAdminBalance('${p.nick}')">Edytuj Saldo</button></td>
-            </tr>`;
+        let dScore = calculateHand(game.dealerHand);
+        while (dScore < 17) {
+            game.dealerHand.push(game.deck.pop());
+            dScore = calculateHand(game.dealerHand);
         }
-        renderAdminSports();
+
+        const pScore = calculateHand(game.playerHand);
+        let winStatus = '', payout = 0;
+
+        if (dScore > 21 || pScore > dScore) { winStatus = 'WIN'; payout = game.bet * 2; }
+        else if (pScore === dScore) { winStatus = 'DRAW'; payout = game.bet; }
+        else { winStatus = 'LOSE'; }
+
+        if (payout > 0) {
+            db.players[socket.nick].balance += payout;
+            saveDB();
+            socket.emit('balance-update', db.players[socket.nick].balance);
+        }
+
+        socket.emit('bj-state', {
+            playerHand: game.playerHand,
+            dealerHand: game.dealerHand,
+            playerScore: pScore,
+            dealerScore: dScore,
+            status: winStatus,
+            bet: game.bet,
+            payout
+        });
+
+        delete blackjackGames[socket.id];
     });
 
-    function renderAdminSports() {
-        const list = document.getElementById('admin-sports-list');
-        if (!list) return;
-        list.innerHTML = '';
+    // BUKMACHER HANDLERS
+    socket.on('place-sports-coupon', (data) => {
+        const player = db.players[socket.nick];
+        const stake = parseInt(data.stake);
 
-        currentMatches.filter(m => m.status === 'OPEN').forEach(m => {
-            list.innerHTML += `
-                <div style="background:#000; padding:8px; margin-bottom:5px; border-radius:5px; display:flex; justify-content:space-between; align-items:center;">
-                    <span>${m.team1} vs ${m.team2}</span>
-                    <div>
-                        <button onclick="adminResolve(${m.id}, '1')">Wygrana 1</button>
-                        ${m.odds['X'] ? `<button onclick="adminResolve(${m.id}, 'X')">Remis X</button>` : ''}
-                        <button onclick="adminResolve(${m.id}, '2')">Wygrana 2</button>
-                    </div>
-                </div>
-            `;
-        });
-    }
+        if (!stake || stake <= 0 || player.balance < stake) {
+            return socket.emit('notification', { type: 'error', msg: 'Brak środków na postawienie kuponu!' });
+        }
 
-    function adminResolve(matchId, result) {
-        socket.emit('admin-resolve-match', { matchId, result });
-    }
+        if (!data.selections || data.selections.length === 0) {
+            return socket.emit('notification', { type: 'error', msg: 'Twój kupon jest pusty!' });
+        }
 
-    function setAdminBalance(nick) {
-        const b = prompt(`Ustaw saldo dla ${nick}:`);
-        if (b) socket.emit('admin-set-balance', { nick, balance: b });
-    }
+        player.balance -= stake;
+        saveDB();
 
-    function forceAdminNum() {
-        const v = document.getElementById('admin-num').value;
-        if (v !== '') socket.emit('admin-force-result', v);
-    }
-</script>
-</body>
-</html>
+        const coupon = {
+            id: 'KUP-' + Math.floor(Math.random() * 899999 + 100000),
+            nick: socket.nick,
+            selections: data.selections,
+            stake: stake,
+            totalOdds: data.totalOdds,
+            potentialWin: Math.floor(stake * data.totalOdds),
+            status: 'PENDING',
+            createdAt: new Date().toLocaleTimeString()
+        };
+
+        db.coupons.push(coupon);
+        saveDB();
+
+        socket.emit('balance-update', player.balance);
+        socket.emit('coupon-placed-success', coupon);
+        socket.emit('notification', { type: 'success', msg: 'Kupon został pomyślnie postawiony!' });
+    });
+
+    // ADMIN HANDLERS
+    socket.on('admin-set-balance', (data) => {
+        if (!socket.isAdmin) return;
+        if (db.players[data.nick]) {
+            db.players[data.nick].balance = parseInt(data.balance);
+            saveDB();
+            io.emit('admin-players-update', getOnlinePlayersData());
+        }
+    });
+
+    socket.on('admin-force-result', (num) => {
+        if (!socket.isAdmin) return;
+        rouletteState.forcedResult = parseInt(num);
+        logEvent(`ADMIN ustawił wynik ruletki: ${num}`);
+    });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`NapletoCasino działa na http://localhost:${PORT}`));
