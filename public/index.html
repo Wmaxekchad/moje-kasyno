@@ -7,9 +7,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-main: #0c0d12;
-            --card-bg: rgba(26, 29, 38, 0.85);
-            --border-glow: rgba(255, 215, 0, 0.25);
+            --bg-main: #0a0b0e;
+            --card-bg: rgba(22, 25, 35, 0.9);
             --gold: #f1c40f;
             --red: #e74c3c;
             --black: #2c3e50;
@@ -23,13 +22,12 @@
             color: #fff;
             margin: 0;
             padding: 0;
-            background-image: radial-gradient(circle at 50% 0%, #1a1e29 0%, #0c0d12 75%);
+            background-image: radial-gradient(circle at 50% 0%, #171b26 0%, #0a0b0e 80%);
             min-height: 100vh;
         }
 
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
 
-        /* HEADER */
         .navbar {
             display: flex;
             justify-content: space-between;
@@ -37,17 +35,16 @@
             background: var(--card-bg);
             padding: 15px 30px;
             border-radius: 16px;
-            border: 1px solid var(--border-glow);
+            border: 1px solid rgba(241, 196, 15, 0.2);
             backdrop-filter: blur(10px);
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
 
-        .brand { font-size: 1.5rem; font-weight: 700; color: var(--gold); letter-spacing: 1px; }
+        .brand { font-size: 1.6rem; font-weight: 700; color: var(--gold); letter-spacing: 1px; }
         .user-info { display: flex; gap: 20px; align-items: center; }
-        .balance-badge { background: rgba(46, 204, 113, 0.15); border: 1px solid var(--green); color: var(--green); padding: 8px 16px; border-radius: 20px; font-weight: 600; }
+        .balance-badge { background: rgba(46, 204, 113, 0.15); border: 1px solid var(--green); color: var(--green); padding: 8px 18px; border-radius: 20px; font-weight: 600; }
 
-        /* NAVIGATION TABS */
-        .nav-tabs { display: flex; gap: 15px; margin-bottom: 25px; }
+        .nav-tabs { display: flex; gap: 15px; margin-bottom: 20px; }
         .tab-btn {
             background: var(--card-bg);
             border: 1px solid rgba(255,255,255,0.1);
@@ -60,48 +57,116 @@
         }
         .tab-btn.active, .tab-btn:hover { background: var(--gold); color: #000; border-color: var(--gold); }
 
-        /* NOTIFICATIONS */
         #notif-area { position: fixed; top: 20px; right: 20px; z-index: 999; }
         .notif { padding: 12px 20px; border-radius: 8px; margin-bottom: 10px; color: #fff; font-weight: 600; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
         .notif-success { background: var(--green); }
         .notif-error { background: var(--red); }
         .notif-info { background: #3498db; }
 
-        /* GAME CONTAINERS */
+        /* GRID Z KANĄ I PASEK LIVE BETS */
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 20px;
+        }
+
         .game-panel { background: var(--card-bg); border-radius: 16px; padding: 25px; border: 1px solid rgba(255,255,255,0.05); }
 
-        /* RULETKA TASIEMKA */
-        .roulette-wrapper { position: relative; height: 100px; background: #000; border-radius: 12px; overflow: hidden; border: 2px solid var(--gold); margin-bottom: 20px; }
-        .roulette-pin { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 4px; height: 100%; background: var(--gold); z-index: 10; box-shadow: 0 0 10px var(--gold); }
-        .roulette-tape { display: flex; position: absolute; top: 15px; height: 70px; transition: transform 5s cubic-bezier(0.1, 0.9, 0.1, 1); }
-        .r-card { min-width: 60px; height: 70px; margin: 0 3px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.2rem; }
+        /* PRECYZYJNA ANIMACJA RULETKI */
+        .roulette-wrapper {
+            position: relative;
+            height: 90px;
+            background: #050608;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid var(--gold);
+            margin-bottom: 20px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        .roulette-pin {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 100%;
+            background: var(--gold);
+            z-index: 10;
+            box-shadow: 0 0 12px var(--gold);
+        }
+
+        .roulette-tape {
+            display: flex;
+            position: absolute;
+            top: 10px;
+            height: 70px;
+            will-change: transform;
+        }
+
+        .r-card {
+            width: 60px;
+            height: 70px;
+            margin: 0 5px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.3rem;
+            flex-shrink: 0;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
 
         .bg-red { background: var(--red); }
         .bg-black { background: var(--black); }
         .bg-green { background: var(--green); }
 
         /* STÓŁ RULETKI */
-        .roulette-table { display: grid; grid-template-columns: 60px repeat(12, 1fr); gap: 5px; margin-top: 20px; }
-        .grid-btn { padding: 15px 5px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); transition: 0.2s; }
-        .grid-btn:hover { transform: scale(1.05); filter: brightness(1.2); }
+        .roulette-table { display: grid; grid-template-columns: 60px repeat(12, 1fr); gap: 6px; margin-top: 20px; }
+        .grid-btn { padding: 14px 2px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); transition: 0.2s; user-select: none; }
+        .grid-btn:hover { transform: translateY(-2px); filter: brightness(1.25); }
         .zero-btn { grid-row: span 3; background: var(--green); display: flex; align-items: center; justify-content: center; }
 
         .extra-bets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
         .color-bets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
 
+        /* LIVE BETS PANEL (PO PRAWEJ STRONIE) */
+        .live-bets-panel {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+            max-height: 650px;
+        }
+
+        .live-bets-title { font-size: 1.1rem; font-weight: 700; color: var(--gold); margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
+        .live-bets-list { overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 8px; }
+
+        .live-bet-item {
+            background: rgba(0,0,0,0.4);
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+            border-left: 3px solid var(--gold);
+        }
+
         /* BLACKJACK UI */
         .bj-table { text-align: center; }
         .cards-container { display: flex; justify-content: center; gap: 10px; margin: 20px 0; }
-        .card { width: 70px; height: 100px; background: #fff; color: #000; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; padding: 8px; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 8px rgba(0,0,0,0.4); }
+        .card { width: 75px; height: 105px; background: #fff; color: #000; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; padding: 8px; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         .card.red-card { color: var(--red); }
 
-        /* BUTTONS & INPUTS */
         .btn { padding: 12px 24px; border-radius: 8px; border: none; font-weight: 700; cursor: pointer; transition: 0.2s; }
         .btn-gold { background: var(--gold); color: #000; }
         .btn-gold:hover { background: #d4ac0d; }
         input[type="number"], input[type="text"] { background: #000; border: 1px solid #333; color: #fff; padding: 12px; border-radius: 8px; font-size: 1rem; }
 
-        /* ADMIN PANEL */
         .admin-card { background: #191409; border: 1px solid var(--gold); padding: 20px; border-radius: 12px; margin-top: 25px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         td, th { padding: 10px; border: 1px solid #333; text-align: left; }
@@ -114,87 +179,94 @@
 <div id="notif-area"></div>
 
 <div class="container">
-    <!-- EKRAN LOGOWANIA -->
     <div id="login-screen" class="game-panel" style="max-width:400px; margin: 100px auto; text-align:center;">
         <h2 style="color:var(--gold)">Royal Casino Pro</h2>
-        <p style="color:#aaa;">Wejdź i odbierz startowe <strong>$1 000</strong>!</p>
+        <p style="color:#aaa;">Zaloguj się i odbierz startowe <strong>$1 000</strong>!</p>
         <input type="text" id="nick-input" placeholder="Twój Pseudonim..." style="width:100%; margin-bottom:15px;">
-        <button class="btn btn-gold" style="width:100%" onclick="login()">Dołącz do Gry</button>
+        <button class="btn btn-gold" style="width:100%" onclick="login()">Zagraj teraz</button>
     </div>
 
-    <!-- GŁÓWNA STRONA -->
     <div id="main-screen" class="hidden">
         <div class="navbar">
             <div class="brand">🎰 ROYAL CASINO</div>
             <div class="user-info">
-                <span>Witaj, <strong id="u-nick"></strong></span>
+                <span>Gracz: <strong id="u-nick"></strong></span>
                 <div class="balance-badge">Saldo: $<span id="u-balance">0</span></div>
             </div>
         </div>
 
         <div class="nav-tabs">
             <button class="tab-btn active" onclick="switchTab('roulette')">Ruletka Europejska</button>
-            <button class="tab-btn" onclick="switchTab('blackjack')">Blackjack (Oczko)</button>
+            <button class="tab-btn" onclick="switchTab('blackjack')">Blackjack</button>
         </div>
 
-        <!-- SEKCJA RULETKI -->
-        <div id="tab-roulette" class="game-panel">
-            <div style="display:flex; justify-style:space-between; align-items:center; margin-bottom:15px;">
-                <h3>Europejska Ruletka (0-36)</h3>
-                <div>Czas: <strong id="r-timer" style="color:var(--gold)">15s</strong></div>
-            </div>
+        <div class="layout-grid">
+            <div>
+                <!-- RULETKA PANEL -->
+                <div id="tab-roulette" class="game-panel">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <h3 style="margin:0;">Ruletka Live</h3>
+                        <div>Następne losowanie za: <strong id="r-timer" style="color:var(--gold); font-size:1.2rem;">15s</strong></div>
+                    </div>
 
-            <div class="roulette-wrapper">
-                <div class="roulette-pin"></div>
-                <div class="roulette-tape" id="r-tape"></div>
-            </div>
+                    <div class="roulette-wrapper">
+                        <div class="roulette-pin"></div>
+                        <div class="roulette-tape" id="r-tape"></div>
+                    </div>
 
-            <div style="text-align:center; margin-bottom:20px;">
-                Stawka: <input type="number" id="r-bet-amount" value="50" min="10" style="width:120px;">
-                <button class="btn btn-gold" onclick="setBet(100)">$100</button>
-                <button class="btn btn-gold" onclick="setBet(500)">$500</button>
-            </div>
+                    <div style="text-align:center; margin-bottom:20px;">
+                        Stawka: <input type="number" id="r-bet-amount" value="50" min="10" style="width:120px;">
+                        <button class="btn btn-gold" onclick="setBet(100)">$100</button>
+                        <button class="btn btn-gold" onclick="setBet(500)">$500</button>
+                    </div>
 
-            <!-- STÓŁ DO BETOWANIA -->
-            <div class="roulette-table" id="r-table">
-                <!-- Generowane dynamicznie w JS -->
-            </div>
+                    <div class="roulette-table" id="r-table"></div>
 
-            <div class="extra-bets">
-                <div class="grid-btn" style="background:#222;" onclick="placeRBet('doz1', '1-12')">1st 12 (x3)</div>
-                <div class="grid-btn" style="background:#222;" onclick="placeRBet('doz2', '13-24')">2nd 12 (x3)</div>
-                <div class="grid-btn" style="background:#222;" onclick="placeRBet('doz3', '25-36')">3rd 12 (x3)</div>
-            </div>
+                    <div class="extra-bets">
+                        <div class="grid-btn" style="background:#222;" onclick="placeRBet('doz1', '1-12')">1st 12 (x3)</div>
+                        <div class="grid-btn" style="background:#222;" onclick="placeRBet('doz2', '13-24')">2nd 12 (x3)</div>
+                        <div class="grid-btn" style="background:#222;" onclick="placeRBet('doz3', '25-36')">3rd 12 (x3)</div>
+                    </div>
 
-            <div class="color-bets">
-                <div class="grid-btn" style="background:#222;" onclick="placeRBet('half1', '1-18')">1-18 (x2)</div>
-                <div class="grid-btn bg-red" onclick="placeRBet('color', 'red')">Czerwone (x2)</div>
-                <div class="grid-btn bg-black" onclick="placeRBet('color', 'black')">Czarne (x2)</div>
-                <div class="grid-btn" style="background:#222;" onclick="placeRBet('half2', '19-36')">19-36 (x2)</div>
-            </div>
-        </div>
-
-        <!-- SEKCJA BLACKJACKA -->
-        <div id="tab-blackjack" class="game-panel hidden">
-            <div class="bj-table">
-                <h3>Blackjack Table</h3>
-                
-                <div id="bj-controls-start">
-                    <input type="number" id="bj-bet-amount" value="100" min="10" style="width:150px;">
-                    <button class="btn btn-gold" onclick="startBlackjack()">Zagraj Rozdanie</button>
+                    <div class="color-bets">
+                        <div class="grid-btn" style="background:#222;" onclick="placeRBet('half1', '1-18')">1-18 (x2)</div>
+                        <div class="grid-btn bg-red" onclick="placeRBet('color', 'red')">Czerwone (x2)</div>
+                        <div class="grid-btn bg-black" onclick="placeRBet('color', 'black')">Czarne (x2)</div>
+                        <div class="grid-btn" style="background:#222;" onclick="placeRBet('half2', '19-36')">19-36 (x2)</div>
+                    </div>
                 </div>
 
-                <div id="bj-game-area" class="hidden">
-                    <h4>Karty Krupiera (<span id="bj-dealer-score">0</span>)</h4>
-                    <div class="cards-container" id="bj-dealer-cards"></div>
+                <!-- BLACKJACK PANEL -->
+                <div id="tab-blackjack" class="game-panel hidden">
+                    <div class="bj-table">
+                        <h3>Stół do Blackjacka</h3>
+                        
+                        <div id="bj-controls-start">
+                            <input type="number" id="bj-bet-amount" value="100" min="10" style="width:150px;">
+                            <button class="btn btn-gold" onclick="startBlackjack()">Rozdaj Karty</button>
+                        </div>
 
-                    <h4>Twoje Karty (<span id="bj-player-score">0</span>)</h4>
-                    <div class="cards-container" id="bj-player-cards"></div>
+                        <div id="bj-game-area" class="hidden">
+                            <h4>Krupier (<span id="bj-dealer-score">0</span>)</h4>
+                            <div class="cards-container" id="bj-dealer-cards"></div>
 
-                    <div style="margin-top:20px;" id="bj-actions">
-                        <button class="btn btn-gold" onclick="bjHit()">Hit (Dobierz)</button>
-                        <button class="btn" style="background:var(--red); color:#fff;" onclick="bjStand()">Stand (Czekaj)</button>
+                            <h4>Twój Wynik (<span id="bj-player-score">0</span>)</h4>
+                            <div class="cards-container" id="bj-player-cards"></div>
+
+                            <div style="margin-top:20px;" id="bj-actions">
+                                <button class="btn btn-gold" onclick="bjHit()">Hit (Dobierz)</button>
+                                <button class="btn" style="background:var(--red); color:#fff;" onclick="bjStand()">Stand (Pas)</button>
+                            </div>
+                        </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- PODGLĄD ZAKŁADÓW NA ŻYWO (PO PRAWEJ) -->
+            <div class="live-bets-panel">
+                <div class="live-bets-title">🟢 Zakłady na Żywo</div>
+                <div class="live-bets-list" id="live-bets-list">
+                    <!-- Zakłady będą pojawiać się tutaj dynamicznie -->
                 </div>
             </div>
         </div>
@@ -210,7 +282,7 @@
                 </div>
             </div>
 
-            <h4>Zarządzanie Gracze Online</h4>
+            <h4>Gracze Online:</h4>
             <table>
                 <thead>
                     <tr><th>Nick</th><th>Saldo</th><th>IP</th><th>Akcje</th></tr>
@@ -226,6 +298,10 @@
     const socket = io();
     const REDS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
     let myNick = '', myBalance = 0;
+
+    // Struktura sekwencji paska ruletki
+    const rouletteOrder = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+    let fullTapeList = [];
 
     function notify(msg, type = 'info') {
         const area = document.getElementById('notif-area');
@@ -253,6 +329,10 @@
 
         buildRouletteTable();
         buildRouletteTape();
+
+        if (data.currentBets) {
+            data.currentBets.forEach(renderLiveBet);
+        }
     });
 
     socket.on('balance-update', (bal) => {
@@ -276,7 +356,7 @@
         }
     }
 
-    /* RULETKA */
+    /* RULETKA ENGINE */
     function buildRouletteTable() {
         const table = document.getElementById('r-table');
         table.innerHTML = '<div class="grid-btn zero-btn" onclick="placeRBet(\'number\', 0)">0</div>';
@@ -294,14 +374,18 @@
     function buildRouletteTape() {
         const tape = document.getElementById('r-tape');
         tape.innerHTML = '';
-        for (let i = 0; i < 4; i++) {
-            for (let n = 0; n <= 36; n++) {
+        fullTapeList = [];
+
+        // Generowanie wielokrotnie powtórzonej sekwencji dla zachowania płynności
+        for (let r = 0; r < 6; r++) {
+            rouletteOrder.forEach(n => {
+                fullTapeList.push(n);
                 const card = document.createElement('div');
                 let bg = n === 0 ? 'bg-green' : (REDS.includes(n) ? 'bg-red' : 'bg-black');
                 card.className = `r-card ${bg}`;
                 card.innerText = n;
                 tape.appendChild(card);
-            }
+            });
         }
     }
 
@@ -314,22 +398,50 @@
 
     socket.on('timer-tick', t => document.getElementById('r-timer').innerText = t + 's');
 
+    // DOKŁADNE PRECYZYJNE OBLICZANIE WEKTORA ZATRZYMANIA KARTY
     socket.on('roulette-spin', (data) => {
         const tape = document.getElementById('r-tape');
-        const cardWidth = 66; 
-        const targetIndex = data.winningNumber + 74; 
-        const offset = (targetIndex * cardWidth) - (document.querySelector('.roulette-wrapper').offsetWidth / 2);
-        tape.style.transform = `translateX(-${offset}px)`;
+        const cardWidth = 70; // 60px szerokości + 10px łącznego marginesu
+        
+        // Zawsze zatrzymuj w 4. zestawie sekwencji (dla idealnego efektu zakręcenia)
+        const targetSetIndex = 3 * rouletteOrder.length + rouletteOrder.indexOf(data.winningNumber);
+        
+        // Obliczenie dokładnego offsetu do wycentrowania karty na środku paska
+        const wrapperWidth = document.querySelector('.roulette-wrapper').offsetWidth;
+        const centerOffset = (wrapperWidth / 2) - (cardWidth / 2);
+        const finalTransform = (targetSetIndex * cardWidth) - centerOffset;
+
+        tape.style.transition = 'transform 5s cubic-bezier(0.15, 0.9, 0.2, 1)';
+        tape.style.transform = `translateX(-${finalTransform}px)`;
     });
 
     socket.on('roulette-reset', () => {
         const tape = document.getElementById('r-tape');
         tape.style.transition = 'none';
         tape.style.transform = 'translateX(0px)';
-        setTimeout(() => tape.style.transition = 'transform 5s cubic-bezier(0.1, 0.9, 0.1, 1)', 50);
+        document.getElementById('live-bets-list').innerHTML = ''; // Wyczyszczenie paska po rundzie
     });
 
-    /* BLACKJACK */
+    /* PASEK ZAKŁADÓW LIVE */
+    socket.on('new-live-bet', (bet) => {
+        renderLiveBet(bet);
+    });
+
+    function renderLiveBet(bet) {
+        const list = document.getElementById('live-bets-list');
+        const item = document.createElement('div');
+        item.className = 'live-bet-item';
+        item.innerHTML = `
+            <div>
+                <strong>${bet.nick}</strong><br>
+                <small style="color:#aaa;">${bet.type}: ${bet.value}</small>
+            </div>
+            <div style="color:var(--gold); font-weight:bold;">$${bet.amount.toLocaleString()}</div>
+        `;
+        list.prepend(item);
+    }
+
+    /* BLACKJACK HANDLERS */
     function startBlackjack() {
         const amount = document.getElementById('bj-bet-amount').value;
         socket.emit('bj-start', amount);
@@ -351,9 +463,9 @@
             document.getElementById('bj-actions').classList.add('hidden');
             setTimeout(() => {
                 if (data.status === 'WIN') notify(`Wygrałeś $${data.payout}!`, 'success');
-                else if (data.status === 'BUST') notify('Przekroczono 21! Przegrana.', 'error');
+                else if (data.status === 'BUST') notify('Za dużo! Przegrana.', 'error');
                 else if (data.status === 'LOSE') notify('Krupier wygrał.', 'error');
-                else notify('Remis! Zwrot stawki.', 'info');
+                else notify('Remis! Zwrot środków.', 'info');
 
                 document.getElementById('bj-controls-start').classList.remove('hidden');
                 document.getElementById('bj-actions').classList.remove('hidden');
@@ -374,7 +486,7 @@
         });
     }
 
-    /* ADMIN */
+    /* ADMIN HANDLERS */
     socket.on('admin-players-update', (players) => {
         const body = document.getElementById('admin-players-list');
         if (!body) return;
@@ -391,7 +503,7 @@
     });
 
     function setAdminBalance(nick) {
-        const b = prompt(`Nowe saldo dla ${nick}:`);
+        const b = prompt(`Ustaw saldo dla ${nick}:`);
         if (b) socket.emit('admin-set-balance', { nick, balance: b });
     }
 
