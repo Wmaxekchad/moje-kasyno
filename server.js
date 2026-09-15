@@ -37,7 +37,7 @@ let rouletteState = {
     status: 'WAITING',
     forcedResult: null,
     history: [12, 35, 0, 7, 22, 18, 2, 29],
-    bets: [] // [{ nick, type, value, amount, color }]
+    bets: [] // [{ nick, type, value, amount }]
 };
 
 // Pętla Ruletki
@@ -66,7 +66,7 @@ function spinRoulette() {
     io.emit('roulette-spin', { winningNumber, winningColor });
 
     setTimeout(() => {
-        // Rozliczenie zakładów
+        // Rozliczenie zakładów ruletki
         rouletteState.bets.forEach(bet => {
             let socket = Array.from(io.sockets.sockets.values()).find(s => s.nick === bet.nick);
             if (!socket || !db.players[bet.nick]) return;
