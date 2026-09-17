@@ -1,12 +1,17 @@
 {
-  "name": "modern-casino-pro",
-  "version": "3.0.0",
+  "name": "napleto-casino",
+  "version": "1.0.0",
+  "description": "NapletoCasino with DB, Auth, Offline Plinko, Roulette, Blackjack & Sports Betting",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "express": "^4.18.2",
-    "socket.io": "^4.6.1"
+    "socket.io": "^4.7.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }
