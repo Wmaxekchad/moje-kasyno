@@ -45,7 +45,7 @@
         .user-info { display: flex; gap: 20px; align-items: center; }
         .balance-badge { background: rgba(46, 204, 113, 0.15); border: 1px solid var(--green); color: var(--green); padding: 8px 18px; border-radius: 20px; font-weight: 600; }
 
-        .nav-tabs { display: flex; gap: 15px; margin-bottom: 20px; }
+        .nav-tabs { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
         .tab-btn {
             background: var(--card-bg);
             border: 1px solid rgba(255,255,255,0.1);
@@ -115,10 +115,13 @@
         .coupon-item { background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; margin-bottom: 8px; font-size: 0.85rem; border-left: 3px solid var(--blue); position: relative; }
         .coupon-remove { position: absolute; right: 8px; top: 8px; cursor: pointer; color: var(--red); font-weight: bold; }
 
+        /* PLINKO CANVAS */
+        #plinko-canvas { background: #08090c; border-radius: 12px; border: 2px solid var(--gold); display: block; margin: 0 auto; max-width: 100%; }
+
         .btn { padding: 12px 24px; border-radius: 8px; border: none; font-weight: 700; cursor: pointer; transition: 0.2s; }
         .btn-gold { background: var(--gold); color: #000; }
         .btn-gold:hover { background: #d4ac0d; }
-        input[type="number"], input[type="text"] { background: #000; border: 1px solid #333; color: #fff; padding: 12px; border-radius: 8px; font-size: 1rem; }
+        input[type="number"], input[type="text"], input[type="password"], select { background: #000; border: 1px solid #333; color: #fff; padding: 12px; border-radius: 8px; font-size: 1rem; }
 
         .admin-card { background: #191409; border: 1px solid var(--gold); padding: 20px; border-radius: 12px; margin-top: 25px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -132,14 +135,23 @@
 <div id="notif-area"></div>
 
 <div class="container">
-    <div id="login-screen" class="game-panel" style="max-width:400px; margin: 100px auto; text-align:center;">
-        <h2 style="color:var(--gold)">NapletoCasino</h2>
-        <p style="color:#aaa;">Zaloguj się i odbierz darmowe <strong>$1 000</strong>!</p>
-        <input type="text" id="nick-input" placeholder="Twój Pseudonim..." style="width:100%; margin-bottom:15px;">
-        <input type="password" id="admin-password" placeholder="Hasło administratora (opcjonalne)" style="width:100%; margin-bottom:15px;">
-        <button class="btn btn-gold" style="width:100%" onclick="login()">Dołącz do Gry</button>
+    <!-- AUTH SCREEN -->
+    <div id="auth-screen" class="game-panel" style="max-width:420px; margin: 80px auto; text-align:center;">
+        <h2 style="color:var(--gold); margin-bottom:5px;">NapletoCasino</h2>
+        <p style="color:#aaa; font-size:0.9rem; margin-bottom:20px;">Witaj! Zaloguj się lub utwórz nowe konto.</p>
+        
+        <div style="display:flex; gap:10px; margin-bottom:20px;">
+            <button id="tab-login-btn" class="btn btn-gold" style="flex:1;" onclick="switchAuthMode('login')">Logowanie</button>
+            <button id="tab-reg-btn" class="btn" style="flex:1; background:#222; color:#fff;" onclick="switchAuthMode('register')">Rejestracja</button>
+        </div>
+
+        <input type="text" id="auth-nick" placeholder="Nazwa Użytkownika..." style="width:100%; margin-bottom:15px;">
+        <input type="password" id="auth-password" placeholder="Hasło..." style="width:100%; margin-bottom:20px;">
+        
+        <button id="auth-submit-btn" class="btn btn-gold" style="width:100%" onclick="submitAuth()">Zaloguj się</button>
     </div>
 
+    <!-- MAIN SCREEN -->
     <div id="main-screen" class="hidden">
         <div class="navbar">
             <div class="brand">🎰 NapletoCasino</div>
@@ -150,15 +162,50 @@
         </div>
 
         <div class="nav-tabs">
-            <button class="tab-btn active" onclick="switchTab('roulette')">Ruletka Live</button>
+            <button class="tab-btn active" onclick="switchTab('plinko')">🟢 Plinko (Offline)</button>
+            <button class="tab-btn" onclick="switchTab('free')">🎁 Darmowa Kasa</button>
+            <button class="tab-btn" onclick="switchTab('roulette')">Ruletka Live</button>
             <button class="tab-btn" onclick="switchTab('blackjack')">Blackjack</button>
             <button class="tab-btn" onclick="switchTab('sports')">⚽ Bukmacher</button>
         </div>
 
         <div class="layout-grid">
             <div>
+                <!-- PLINKO TAB -->
+                <div id="tab-plinko" class="game-panel" style="text-align:center;">
+                    <h3 style="margin-top:0;">🟢 Plinko Offline</h3>
+                    <div style="margin-bottom:20px; display:flex; justify-content:center; align-items:center; gap:15px; flex-wrap:wrap;">
+                        <div>
+                            <label style="font-size:0.85rem; color:#aaa; display:block;">Stawka:</label>
+                            <input type="number" id="plinko-bet" value="100" min="10" style="width:110px;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.85rem; color:#aaa; display:block;">Rzędy:</label>
+                            <select id="plinko-rows" onchange="initPlinkoBoard()">
+                                <option value="8">8 Rzędów</option>
+                                <option value="10" selected>10 Rzędów</option>
+                                <option value="12">12 Rzędów</option>
+                            </select>
+                        </div>
+                        <div style="align-self:flex-end;">
+                            <button class="btn btn-gold" onclick="dropPlinkoBall()">Upuść Kulkę</button>
+                        </div>
+                    </div>
+                    <canvas id="plinko-canvas" width="600" height="480"></canvas>
+                </div>
+
+                <!-- DARMOWA KASA TAB -->
+                <div id="tab-free" class="game-panel hidden" style="text-align:center; padding: 50px 20px;">
+                    <h2 style="color:var(--gold); margin-top:0;">🎁 Odbierz Darmową Kasę</h2>
+                    <p style="color:#aaa; font-size:1.1rem; max-width:500px; margin: 0 auto 20px auto;">
+                        Możesz odebrać bonusowe <strong>$1 000</strong> raz na każde 4 godziny. Środki od razu trafią na Twoje konto!
+                    </p>
+                    <h1 id="free-timer" style="color:var(--gold); font-size:3rem; margin:30px 0; letter-spacing:2px;">--:--:--</h1>
+                    <button id="claim-btn" class="btn btn-gold" style="font-size:1.2rem; padding:15px 40px;" onclick="claimFreeMoney()">Odbierz $1 000</button>
+                </div>
+
                 <!-- RULETKA PANEL -->
-                <div id="tab-roulette" class="game-panel">
+                <div id="tab-roulette" class="game-panel hidden">
                     <div class="history-container">
                         <div class="history-title">Ostatnie wyniki:</div>
                         <div class="history-list" id="r-history"></div>
@@ -224,13 +271,11 @@
                 <!-- BUKMACHER PANEL -->
                 <div id="tab-sports" class="game-panel hidden">
                     <h3>Zakłady Sportowe i Esportowe</h3>
-                    <div id="sports-matches-list">
-                        <!-- Mecze wczytywane dynamicznie -->
-                    </div>
+                    <div id="sports-matches-list"></div>
                 </div>
             </div>
 
-            <!-- PANEL BOCZNY (ZAKŁADY RULETKI / KUPON BUKMACHERSKI) -->
+            <!-- PANEL BOCZNY -->
             <div>
                 <!-- LIVE BETS RULETKA -->
                 <div class="side-panel" id="side-roulette-panel">
@@ -296,9 +341,11 @@
 <script>
     const socket = io();
     const REDS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
-    let myNick = '', myBalance = 0;
-    const rouletteOrder = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+    let myNick = '', myBalance = 0, myLastFreeReward = 0;
+    let authMode = 'login';
+    let freeMoneyInterval = null;
 
+    const rouletteOrder = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
     let currentMatches = [];
     let myCouponSelections = [];
     let myCoupons = [];
@@ -312,23 +359,41 @@
         setTimeout(() => el.remove(), 4000);
     }
 
-    function login() {
-        const nick = document.getElementById('nick-input').value.trim();
-        const password = document.getElementById('admin-password').value;
-        if (nick) socket.emit('set-nickname', { nick, password });
+    function switchAuthMode(mode) {
+        authMode = mode;
+        if (mode === 'login') {
+            document.getElementById('tab-login-btn').className = 'btn btn-gold';
+            document.getElementById('tab-reg-btn').className = 'btn';
+            document.getElementById('tab-reg-btn').style.background = '#222';
+            document.getElementById('tab-reg-btn').style.color = '#fff';
+            document.getElementById('auth-submit-btn').innerText = 'Zaloguj się';
+        } else {
+            document.getElementById('tab-reg-btn').className = 'btn btn-gold';
+            document.getElementById('tab-login-btn').className = 'btn';
+            document.getElementById('tab-login-btn').style.background = '#222';
+            document.getElementById('tab-login-btn').style.color = '#fff';
+            document.getElementById('auth-submit-btn').innerText = 'Zarejestruj się';
+        }
     }
 
-    socket.on('admin-auth-failed', (data) => {
-        notify(data.msg || 'Błędne dane administratora.', 'error');
-    });
+    function submitAuth() {
+        const nick = document.getElementById('auth-nick').value.trim();
+        const password = document.getElementById('auth-password').value.trim();
+        if (!nick || !password) return notify('Wypełnij pola nicku i hasła!', 'error');
+        socket.emit(authMode, { nick, password });
+    }
+
+    socket.on('auth-error', msg => notify(msg, 'error'));
+    socket.on('auth-success', msg => { notify(msg, 'success'); switchAuthMode('login'); });
 
     socket.on('init-player', (data) => {
         myNick = data.nick;
         myBalance = data.balance;
+        myLastFreeReward = data.lastFreeReward;
         currentMatches = data.sportsMatches || [];
         myCoupons = data.coupons || [];
 
-        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('main-screen').classList.remove('hidden');
         document.getElementById('u-nick').innerText = myNick;
         document.getElementById('u-balance').innerText = myBalance.toLocaleString();
@@ -342,6 +407,8 @@
         if (data.currentBets) data.currentBets.forEach(renderLiveBet);
         renderSportsMatches();
         renderMyCoupons();
+        updateFreeTimer();
+        initPlinkoBoard();
     });
 
     socket.on('balance-update', (bal) => {
@@ -353,25 +420,169 @@
 
     function switchTab(tab) {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('tab-roulette').classList.add('hidden');
-        document.getElementById('tab-blackjack').classList.add('hidden');
-        document.getElementById('tab-sports').classList.add('hidden');
+        ['plinko', 'free', 'roulette', 'blackjack', 'sports'].forEach(t => document.getElementById(`tab-${t}`).classList.add('hidden'));
 
         document.getElementById('side-roulette-panel').classList.add('hidden');
         document.getElementById('side-sports-panel').classList.add('hidden');
 
-        if (tab === 'roulette') {
-            document.getElementById('tab-roulette').classList.remove('hidden');
-            document.getElementById('side-roulette-panel').classList.remove('hidden');
-        } else if (tab === 'blackjack') {
-            document.getElementById('tab-blackjack').classList.remove('hidden');
-            document.getElementById('side-roulette-panel').classList.remove('hidden');
-        } else if (tab === 'sports') {
-            document.getElementById('tab-sports').classList.remove('hidden');
+        document.getElementById(`tab-${tab}`).classList.remove('hidden');
+
+        if (tab === 'sports') {
             document.getElementById('side-sports-panel').classList.remove('hidden');
+        } else {
+            document.getElementById('side-roulette-panel').classList.remove('hidden');
         }
         event.target.classList.add('active');
     }
+
+    /* DARMOWA KASA */
+    function updateFreeTimer() {
+        if (freeMoneyInterval) clearInterval(freeMoneyInterval);
+        const FOUR_HOURS = 4 * 60 * 60 * 1000;
+
+        freeMoneyInterval = setInterval(() => {
+            const now = Date.now();
+            const diff = FOUR_HOURS - (now - myLastFreeReward);
+
+            if (diff <= 0) {
+                document.getElementById('free-timer').innerText = "GOTOWE DO ODBIORU!";
+                document.getElementById('claim-btn').disabled = false;
+            } else {
+                document.getElementById('claim-btn').disabled = true;
+                const h = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
+                const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)).toString().padStart(2, '0');
+                const s = Math.floor((diff % (1000 * 60)) / 1000).toString().padStart(2, '0');
+                document.getElementById('free-timer').innerText = `${h}:${m}:${s}`;
+            }
+        }, 1000);
+    }
+
+    function claimFreeMoney() {
+        socket.emit('claim-free-money');
+    }
+
+    socket.on('free-reward-claimed', time => {
+        myLastFreeReward = time;
+        updateFreeTimer();
+    });
+
+    /* --- PLINKO CANVAS ENGINE (LOCAL / OFFLINE) --- */
+    const canvas = document.getElementById('plinko-canvas');
+    const ctx = canvas.getContext('2d');
+    let pegs = [];
+    let multipliers = [];
+    let balls = [];
+
+    const MULTIPLIERS_PRESETS = {
+        8: [5.6, 2.1, 1.1, 1, 0.5, 1, 1.1, 2.1, 5.6],
+        10: [8.9, 3, 1.4, 1.1, 1, 0.5, 1, 1.1, 1.4, 3, 8.9],
+        12: [10, 4, 2, 1.4, 1.1, 1, 0.5, 1, 1.1, 1.4, 2, 4, 10]
+    };
+
+    function initPlinkoBoard() {
+        const rows = parseInt(document.getElementById('plinko-rows').value);
+        pegs = [];
+        multipliers = MULTIPLIERS_PRESETS[rows] || MULTIPLIERS_PRESETS[10];
+
+        const startY = 40;
+        const spacingY = 32;
+
+        for (let r = 0; r <= rows; r++) {
+            const count = r + 3;
+            const startX = (canvas.width / 2) - ((count - 1) * 18);
+            for (let c = 0; c < count; c++) {
+                pegs.push({ x: startX + c * 36, y: startY + r * spacingY, radius: 4 });
+            }
+        }
+    }
+
+    function dropPlinkoBall() {
+        const bet = parseInt(document.getElementById('plinko-bet').value);
+        if (!bet || bet <= 0) return notify('Podaj poprawną stawkę!', 'error');
+        const ballId = Math.random().toString(36).substr(2, 9);
+        socket.emit('plinko-drop', { bet, ballId });
+    }
+
+    socket.on('plinko-approved', (data) => {
+        balls.push({
+            id: data.ballId,
+            bet: data.bet,
+            x: canvas.width / 2 + (Math.random() - 0.5) * 4,
+            y: 15,
+            vx: 0,
+            vy: 2,
+            radius: 6
+        });
+    });
+
+    function updatePlinko() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Pegs
+        ctx.fillStyle = "#fff";
+        pegs.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Draw Multipliers Slots
+        const rows = parseInt(document.getElementById('plinko-rows').value);
+        const lastRowY = 40 + rows * 32 + 20;
+        const slotWidth = 32;
+        const startX = (canvas.width / 2) - ((multipliers.length * slotWidth) / 2);
+
+        multipliers.forEach((m, idx) => {
+            const x = startX + idx * slotWidth;
+            ctx.fillStyle = m >= 2 ? '#e74c3c' : (m >= 1 ? '#f1c40f' : '#34495e');
+            ctx.fillRect(x + 2, lastRowY, slotWidth - 4, 25);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 10px Poppins';
+            ctx.textAlign = 'center';
+            ctx.fillText(m + 'x', x + slotWidth / 2, lastRowY + 16);
+        });
+
+        // Update & Draw Balls
+        for (let i = balls.length - 1; i >= 0; i--) {
+            let b = balls[i];
+            b.vy += 0.15; // Gravity
+            b.x += b.vx;
+            b.y += b.vy;
+
+            // Collisions with pegs
+            pegs.forEach(p => {
+                let dx = b.x - p.x;
+                let dy = b.y - p.y;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < b.radius + p.radius) {
+                    let angle = Math.atan2(dy, dx);
+                    b.vx = Math.cos(angle) * 1.5 + (Math.random() - 0.5) * 0.5;
+                    b.vy = Math.sin(angle) * 1.5;
+                }
+            });
+
+            // Draw Ball
+            ctx.fillStyle = '#2ecc71';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Check Bottom Landing
+            if (b.y >= lastRowY) {
+                let slotIndex = Math.floor((b.x - startX) / slotWidth);
+                slotIndex = Math.max(0, Math.min(multipliers.length - 1, slotIndex));
+
+                const multiplier = multipliers[slotIndex];
+                socket.emit('plinko-land', { bet: b.bet, multiplier });
+
+                balls.splice(i, 1);
+            }
+        }
+
+        requestAnimationFrame(updatePlinko);
+    }
+
+    requestAnimationFrame(updatePlinko);
 
     /* RULETKA */
     function renderHistory(history) {
@@ -388,7 +599,7 @@
 
     function buildRouletteTable() {
         const table = document.getElementById('r-table');
-        table.innerHTML = '<div class="grid-btn zero-btn" onclick="placeRBet(\'number\', 0)">0</div>';
+        table.innerHTML = '<div class="grid-btn zero-btn" onclick="placeRBet('number', 0)">0</div>';
         for (let i = 1; i <= 36; i++) {
             const isRed = REDS.includes(i);
             const btn = document.createElement('div');
