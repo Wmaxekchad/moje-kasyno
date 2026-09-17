@@ -3,43 +3,53 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// Store database in persistent path if needed, or local folder
 const DB_FILE = path.join(__dirname, 'database.json');
 const LOG_FILE = path.join(__dirname, 'casino.log');
-const ADMIN_IPS = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
-// Konta administratorów — logowanie odbywa się po nicku + haśle.
+
 const ADMIN_USERS = {
-    maceke: 'Naplet123#',
-    wmaxek: 'Naplet123#'
+    'maceke': 'Naplet123#',
+    'wmaxek': 'Naplet123#'
 };
 
 app.use(express.static(path.join(__dirname, 'public')));
 
 let db = { players: {}, coupons: [] };
+
 if (fs.existsSync(DB_FILE)) {
-    try { 
-        db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); 
+    try {
+        db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+        if (!db.players) db.players = {};
         if (!db.coupons) db.coupons = [];
-    } catch (e) { console.error("Błąd bazy:", e); }
+    } catch (e) {
+        console.error("Błąd odczytu bazy danych:", e);
+    }
 }
 
 function saveDB() {
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+    try {
+        fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+    } catch (e) {
+        console.error("Błąd zapisu bazy danych:", e);
+    }
 }
 
 function logEvent(text) {
     const entry = `[${new Date().toLocaleString('pl-PL')}] ${text}\n`;
-    fs.appendFileSync(LOG_FILE, entry);
+    try {
+        fs.appendFileSync(LOG_FILE, entry);
+    } catch (e) {}
     io.emit('admin-log', entry);
 }
 
-// --- RULETKA (BEZ ZMIAN) ---
+// --- RULETKA ---
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
-
 let rouletteState = {
     timer: 15,
     status: 'WAITING',
@@ -58,14 +68,8 @@ setInterval(() => {
 
 function spinRoulette() {
     rouletteState.status = 'SPINNING';
-    
-    let winningNumber;
-    if (rouletteState.forcedResult !== null) {
-        winningNumber = rouletteState.forcedResult;
-        rouletteState.forcedResult = null;
-    } else {
-        winningNumber = Math.floor(Math.random() * 37);
-    }
+    let winningNumber = rouletteState.forcedResult !== null ? rouletteState.forcedResult : Math.floor(Math.random() * 37);
+    rouletteState.forcedResult = null;
 
     let winningColor = winningNumber === 0 ? 'green' : (RED_NUMBERS.includes(winningNumber) ? 'red' : 'black');
     logEvent(`Ruletka: Wygrana cyfra ${winningNumber} (${winningColor.toUpperCase()})`);
@@ -82,8 +86,6 @@ function spinRoulette() {
 
             if (bet.type === 'number' && parseInt(bet.value) === winningNumber) { won = true; multiplier = 36; }
             else if (bet.type === 'color' && bet.value === winningColor) { won = true; multiplier = 2; }
-            else if (bet.type === 'even' && winningNumber !== 0 && winningNumber % 2 === 0) { won = true; multiplier = 2; }
-            else if (bet.type === 'odd' && winningNumber % 2 !== 0) { won = true; multiplier = 2; }
             else if (bet.type === 'doz1' && winningNumber >= 1 && winningNumber <= 12) { won = true; multiplier = 3; }
             else if (bet.type === 'doz2' && winningNumber >= 13 && winningNumber <= 24) { won = true; multiplier = 3; }
             else if (bet.type === 'doz3' && winningNumber >= 25 && winningNumber <= 36) { won = true; multiplier = 3; }
@@ -106,14 +108,11 @@ function spinRoulette() {
         rouletteState.timer = 15;
         rouletteState.status = 'WAITING';
 
-        io.emit('roulette-reset', {
-            history: rouletteState.history,
-            players: getOnlinePlayersData()
-        });
+        io.emit('roulette-reset', { history: rouletteState.history, players: getOnlinePlayersData() });
     }, 6000);
 }
 
-// --- BLACKJACK ENGINE (BEZ ZMIAN) ---
+// --- BLACKJACK ENGINE ---
 const blackjackGames = {};
 
 function createDeck() {
@@ -137,7 +136,7 @@ function calculateHand(hand) {
     return score;
 }
 
-// --- BUKMACHER ENGINE (NOWOŚĆ) ---
+// --- BUKMACHER ENGINE ---
 let sportsMatches = [];
 let nextSportsId = 1000;
 
@@ -148,26 +147,18 @@ const SPORTS_TEAMS = [
     ['⚽ Piłka Nożna', 'Bayern Monachium', 'Borussia Dortmund'],
     ['⚽ Piłka Nożna', 'PSG', 'Olympique Marsylia'],
     ['⚽ Piłka Nożna', 'Inter Mediolan', 'AC Milan'],
-    ['⚽ Piłka Nożna', 'Juventus', 'Napoli'],
-    ['⚽ Piłka Nożna', 'Atletico Madryt', 'Sevilla'],
     ['🏀 Koszykówka', 'LA Lakers', 'Golden State Warriors'],
     ['🏀 Koszykówka', 'Boston Celtics', 'Miami Heat'],
-    ['🏀 Koszykówka', 'Chicago Bulls', 'New York Knicks'],
-    ['🏀 Koszykówka', 'Dallas Mavericks', 'Phoenix Suns'],
     ['🎮 CS2', 'Natus Vincere', 'FaZe Clan'],
     ['🎮 CS2', 'G2 Esports', 'Vitality'],
-    ['🎮 CS2', 'Spirit', 'MOUZ'],
-    ['🎮 CS2', 'Astralis', 'Ninjas in Pyjamas'],
     ['🎾 Tenis', 'Iga Świątek', 'Aryna Sabalenka'],
-    ['🎾 Tenis', 'Carlos Alcaraz', 'Jannik Sinner'],
-    ['🎾 Tenis', 'Coco Gauff', 'Jessica Pegula'],
-    ['🎾 Tenis', 'Daniil Medvedev', 'Alexander Zverev']
+    ['🎾 Tenis', 'Carlos Alcaraz', 'Jannik Sinner']
 ];
 
 function generateRandomMatch() {
     const template = SPORTS_TEAMS[Math.floor(Math.random() * SPORTS_TEAMS.length)];
     const id = nextSportsId++;
-    const hasDraw = template[0].includes('Piłka Nożna') || template[0].includes('Koszykówka');
+    const hasDraw = template[0].includes('Piłka Nożna');
 
     const newMatch = {
         id,
@@ -181,20 +172,17 @@ function generateRandomMatch() {
         },
         status: 'OPEN',
         result: null,
-        createdAt: new Date().toISOString(),
-        autoResolveAt: Date.now() + 300000
+        createdAt: new Date().toISOString()
     };
 
     sportsMatches.push(newMatch);
 
-    // Maksymalnie 100 widocznych opcji/meczów w systemie.
     if (sportsMatches.length > 100) {
         sportsMatches.splice(0, sportsMatches.length - 100);
     }
 
     io.emit('sports-matches-update', sportsMatches);
 
-    // Każdy automatycznie wygenerowany mecz jest rozstrzygany dokładnie 5 minut później.
     setTimeout(() => {
         const match = sportsMatches.find(m => m.id === id);
         if (!match || match.status === 'RESOLVED') return;
@@ -207,12 +195,10 @@ function generateRandomMatch() {
     return newMatch;
 }
 
-// Wypełnij bukmachera do 100 opcji przy starcie.
-for (let i = 0; i < 100; i++) {
+for (let i = 0; i < 20; i++) {
     generateRandomMatch();
 }
 
-// Od teraz dokładnie 3 nowe mecze/opcje co 5 minut.
 setInterval(() => {
     generateRandomMatch();
     generateRandomMatch();
@@ -224,9 +210,8 @@ function resolveMatch(matchId, result) {
     if (!match || match.status === 'RESOLVED') return;
 
     match.status = 'RESOLVED';
-    match.result = result; // '1', 'X', lub '2'
+    match.result = result;
 
-    // Rozliczanie kuponów
     db.coupons.forEach(coupon => {
         if (coupon.status !== 'PENDING') return;
 
@@ -246,14 +231,12 @@ function resolveMatch(matchId, result) {
 
         if (allResolved) {
             coupon.status = couponWon ? 'WON' : 'LOST';
-            if (couponWon) {
-                if (db.players[coupon.nick]) {
-                    db.players[coupon.nick].balance += coupon.potentialWin;
-                    let socket = Array.from(io.sockets.sockets.values()).find(s => s.nick === coupon.nick);
-                    if (socket) {
-                        socket.emit('notification', { type: 'success', msg: `Twój kupon wygrał $${coupon.potentialWin.toLocaleString()}!` });
-                        socket.emit('balance-update', db.players[coupon.nick].balance);
-                    }
+            if (couponWon && db.players[coupon.nick]) {
+                db.players[coupon.nick].balance += coupon.potentialWin;
+                let socket = Array.from(io.sockets.sockets.values()).find(s => s.nick === coupon.nick);
+                if (socket) {
+                    socket.emit('notification', { type: 'success', msg: `Twój kupon wygrał $${coupon.potentialWin.toLocaleString()}!` });
+                    socket.emit('balance-update', db.players[coupon.nick].balance);
                 }
             }
         }
@@ -279,65 +262,126 @@ function getOnlinePlayersData() {
     return online;
 }
 
+// Socket handlers
 io.on('connection', (socket) => {
-    const clientIp = socket.handshake.address.replace('::ffff:', '');
     socket.isAdmin = false;
 
-    socket.on('set-nickname', (data) => {
-        // Obsługujemy również stary format, gdyby frontend wysłał sam tekst.
-        const requestedNick = typeof data === 'string' ? data : data.nick;
-        const password = typeof data === 'string' ? '' : (data.password || '');
-        const cleanNick = String(requestedNick || '').trim() || 'Gracz_' + Math.floor(Math.random() * 1000);
+    // REJESTRACJA
+    socket.on('register', async (data) => {
+        const nick = String(data.nick || '').trim();
+        const password = String(data.password || '').trim();
 
-        // Nicki adminów są zarezerwowane i wymagają poprawnego hasła.
-        if (Object.prototype.hasOwnProperty.call(ADMIN_USERS, cleanNick)) {
-            if (ADMIN_USERS[cleanNick] !== password) {
-                return socket.emit('admin-auth-failed', { msg: 'Nieprawidłowe hasło administratora.' });
-            }
-            socket.isAdmin = true;
-            logEvent(`ADMIN zalogował się jako ${cleanNick}`);
-        } else {
-            socket.isAdmin = false;
-        }
+        if (!nick || !password) return socket.emit('auth-error', 'Wypełnij wszystkie pola!');
+        if (db.players[nick]) return socket.emit('auth-error', 'Taki użytkownik już istnieje!');
 
-        socket.nick = cleanNick;
+        const hashedPassword = await bcrypt.hash(password, 10);
+        db.players[nick] = {
+            password: hashedPassword,
+            balance: 1000,
+            lastFreeReward: 0,
+            createdAt: new Date().toISOString()
+        };
+        saveDB();
 
-        if (!db.players[cleanNick]) {
-            db.players[cleanNick] = { balance: 1000, createdAt: new Date() };
-            saveDB();
-            logEvent(`Nowy gracz: ${cleanNick} (Otrzymał $1 000)`);
-        }
+        logEvent(`Zarejestrowano nowego gracza: ${nick}`);
+        socket.emit('auth-success', 'Konto utworzone! Możesz się teraz zalogować.');
+    });
+
+    // LOGOWANIE
+    socket.on('login', async (data) => {
+        const nick = String(data.nick || '').trim();
+        const password = String(data.password || '').trim();
+
+        const player = db.players[nick];
+        if (!player) return socket.emit('auth-error', 'Nieprawidłowy nick lub hasło!');
+
+        const isMatch = await bcrypt.compare(password, player.password);
+        if (!isMatch) return socket.emit('auth-error', 'Nieprawidłowy nick lub hasło!');
+
+        socket.nick = nick;
+        socket.isAdmin = ADMIN_USERS.hasOwnProperty(nick);
 
         socket.emit('init-player', {
-            nick: cleanNick,
-            balance: db.players[cleanNick].balance,
+            nick,
+            balance: player.balance,
             isAdmin: socket.isAdmin,
+            lastFreeReward: player.lastFreeReward || 0,
             history: rouletteState.history,
             timer: rouletteState.timer,
             currentBets: rouletteState.bets,
             sportsMatches: sportsMatches,
-            coupons: db.coupons.filter(c => c.nick === cleanNick)
+            coupons: db.coupons.filter(c => c.nick === nick)
         });
 
         io.emit('admin-players-update', getOnlinePlayersData());
     });
 
+    // DARMOWA KASA (1000$ CO 4 GODZINY)
+    socket.on('claim-free-money', () => {
+        if (!socket.nick || !db.players[socket.nick]) return;
+        const player = db.players[socket.nick];
+        const now = Date.now();
+        const FOUR_HOURS = 4 * 60 * 60 * 1000;
+
+        if (now - (player.lastFreeReward || 0) < FOUR_HOURS) {
+            const timeLeft = FOUR_HOURS - (now - player.lastFreeReward);
+            const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+            const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+            return socket.emit('notification', { type: 'error', msg: `Odbiór możliwy za ${hours}h ${minutes}m!` });
+        }
+
+        player.balance += 1000;
+        player.lastFreeReward = now;
+        saveDB();
+
+        socket.emit('balance-update', player.balance);
+        socket.emit('free-reward-claimed', player.lastFreeReward);
+        socket.emit('notification', { type: 'success', msg: 'Odebrano darmowe $1 000!' });
+    });
+
+    // PLINKO (SERVER-VERIFIED)
+    socket.on('plinko-drop', (data) => {
+        if (!socket.nick || !db.players[socket.nick]) return;
+        const player = db.players[socket.nick];
+        const bet = parseInt(data.bet);
+
+        if (!bet || bet <= 0 || player.balance < bet) {
+            return socket.emit('notification', { type: 'error', msg: 'Brak środków na spadek Plinko!' });
+        }
+
+        player.balance -= bet;
+        saveDB();
+        socket.emit('balance-update', player.balance);
+        socket.emit('plinko-approved', { bet, ballId: data.ballId });
+    });
+
+    socket.on('plinko-land', (data) => {
+        if (!socket.nick || !db.players[socket.nick]) return;
+        const player = db.players[socket.nick];
+        const multiplier = parseFloat(data.multiplier);
+        const bet = parseInt(data.bet);
+
+        if (isNaN(multiplier) || isNaN(bet)) return;
+
+        const winAmount = Math.floor(bet * multiplier);
+        player.balance += winAmount;
+        saveDB();
+
+        socket.emit('balance-update', player.balance);
+        if (winAmount > 0) {
+            socket.emit('notification', { type: 'success', msg: `Plinko: Wygrałeś $${winAmount.toLocaleString()} (${multiplier}x)!` });
+        }
+    });
+
     // RULETKA HANDLERS
     socket.on('place-roulette-bet', (data) => {
         if (!socket.nick || rouletteState.status !== 'WAITING' || rouletteState.timer <= 2) return;
-        
+
         const player = db.players[socket.nick];
         const amount = parseInt(data.amount);
 
         if (!amount || amount <= 0 || player.balance < amount) {
             return socket.emit('notification', { type: 'error', msg: 'Brak wystarczających środków!' });
-        }
-
-        if (data.type === 'color') {
-            let hasColorBet = rouletteState.bets.some(b => b.nick === socket.nick && b.type === 'color');
-            if (hasColorBet) {
-                return socket.emit('notification', { type: 'error', msg: 'Obstawiłeś już kolor w tej rundzie!' });
-            }
         }
 
         player.balance -= amount;
@@ -465,7 +509,7 @@ io.on('connection', (socket) => {
         const coupon = {
             id: 'KUP-' + Math.floor(Math.random() * 899999 + 100000),
             nick: socket.nick,
-            selections: data.selections, // [{ matchId, pick, odds, matchName }]
+            selections: data.selections,
             stake: stake,
             totalOdds: data.totalOdds,
             potentialWin: Math.floor(stake * data.totalOdds),
@@ -505,4 +549,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`NapletoCasino działa na http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`NapletoCasino działa na port ${PORT}`));
